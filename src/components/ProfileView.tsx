@@ -320,6 +320,11 @@ export default function ProfileView() {
         </button>
       </div>
 
+      {/* Version */}
+      <div className="text-center py-2">
+        <span className="text-[10px] text-[#B5AE9E]">MoBill v1.1.1</span>
+      </div>
+
       {/* Hidden file input for import */}
       <input
         ref={fileInputRef}

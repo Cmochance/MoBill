@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Expense, Category } from "@/lib/types";
 import { getCategories, addExpense } from "@/lib/data";
 import { format, parseISO } from "date-fns";
@@ -13,6 +13,12 @@ import {
   ChevronRight,
 } from "lucide-react";
 
+const PAYMENT_OPTIONS = [
+  { value: "wechat" as const, label: "微信支付" },
+  { value: "alipay" as const, label: "支付宝" },
+  { value: "other" as const, label: "其他" },
+];
+
 export default function AddExpenseView({ onBack }: { onBack: () => void }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCat, setSelectedCat] = useState<string>("");
@@ -21,7 +27,12 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [time, setTime] = useState(format(new Date(), "HH:mm"));
   const [recordType, setRecordType] = useState<"expense" | "income">("expense");
+  const [paymentMethod, setPaymentMethod] = useState<
+    "wechat" | "alipay" | "other"
+  >("wechat");
+  const [showPaymentPicker, setShowPaymentPicker] = useState(false);
   const [page, setPage] = useState(0);
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const cats = getCategories();
@@ -41,6 +52,7 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
       expenseTime: time,
       createdAt: new Date().toISOString(),
       type: recordType,
+      paymentMethod,
     };
     addExpense(expense);
     setAmount("");
@@ -54,6 +66,9 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
     page * catsPerPage,
     (page + 1) * catsPerPage,
   );
+
+  const paymentLabel =
+    PAYMENT_OPTIONS.find((p) => p.value === paymentMethod)?.label || "微信支付";
 
   return (
     <div className="pb-24 px-4 pt-4 space-y-4">
@@ -164,7 +179,7 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
                 }}
               >
                 <img
-                  src={cat.iconImgDark || cat.iconImg}
+                  src={cat.iconImg}
                   alt={cat.name}
                   className="w-full h-full object-cover"
                 />
@@ -201,6 +216,7 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
           backgroundRepeat: "no-repeat",
         }}
       >
+        {/* Date */}
         <div
           className="flex items-center justify-between py-2"
           style={{ borderBottom: "1px solid rgba(232, 228, 218, 0.5)" }}
@@ -209,13 +225,42 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
             <Calendar size={18} className="text-[#8C8678]" />
             <span className="text-sm text-[#3D3D3D]">日期</span>
           </div>
-          <div className="flex items-center gap-1">
+          <button
+            onClick={() => dateInputRef.current?.showPicker?.()}
+            className="flex items-center gap-1"
+          >
             <span className="text-sm text-[#8C8678]">
               {format(parseISO(date), "yyyy年M月d日")}
             </span>
             <ChevronRight size={14} className="text-[#D0C8B8]" />
-          </div>
+          </button>
+          <input
+            ref={dateInputRef}
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="absolute opacity-0 w-0 h-0"
+          />
         </div>
+
+        {/* Time */}
+        <div
+          className="flex items-center justify-between py-2"
+          style={{ borderBottom: "1px solid rgba(232, 228, 218, 0.5)" }}
+        >
+          <div className="flex items-center gap-3">
+            <Calendar size={18} className="text-[#8C8678]" />
+            <span className="text-sm text-[#3D3D3D]">时间</span>
+          </div>
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            className="text-sm text-right bg-transparent outline-none text-[#8C8678]"
+          />
+        </div>
+
+        {/* Description */}
         <div
           className="flex items-center justify-between py-2"
           style={{ borderBottom: "1px solid rgba(232, 228, 218, 0.5)" }}
@@ -236,15 +281,20 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
             <ChevronRight size={14} className="text-[#D0C8B8]" />
           </div>
         </div>
+
+        {/* Payment Method */}
         <div className="flex items-center justify-between py-2">
           <div className="flex items-center gap-3">
             <CreditCard size={18} className="text-[#8C8678]" />
             <span className="text-sm text-[#3D3D3D]">支付方式</span>
           </div>
-          <div className="flex items-center gap-1">
-            <span className="text-sm text-[#8C8678]">微信支付</span>
+          <button
+            onClick={() => setShowPaymentPicker(true)}
+            className="flex items-center gap-1"
+          >
+            <span className="text-sm text-[#8C8678]">{paymentLabel}</span>
             <ChevronRight size={14} className="text-[#D0C8B8]" />
-          </div>
+          </button>
         </div>
       </div>
 
@@ -260,6 +310,61 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
       >
         保存
       </button>
+
+      {/* Payment Method Picker */}
+      {showPaymentPicker && (
+        <div
+          className="fixed inset-0 z-[60] flex items-end justify-center"
+          style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
+          onClick={() => setShowPaymentPicker(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-xl p-4 space-y-2"
+            style={{ backgroundColor: "#FAF8F3" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-sm font-medium text-[#8C8678] mb-2 text-center">
+              选择支付方式
+            </div>
+            {PAYMENT_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => {
+                  setPaymentMethod(opt.value);
+                  setShowPaymentPicker(false);
+                }}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-lg active:bg-[#F5F0E8] transition-colors"
+                style={{
+                  backgroundColor:
+                    paymentMethod === opt.value
+                      ? "rgba(90,143,123,0.08)"
+                      : "transparent",
+                }}
+              >
+                <span
+                  className="text-sm"
+                  style={{
+                    color: paymentMethod === opt.value ? "#5A8F7B" : "#3D3D3D",
+                    fontWeight: paymentMethod === opt.value ? 600 : 400,
+                  }}
+                >
+                  {opt.label}
+                </span>
+                {paymentMethod === opt.value && (
+                  <div className="w-2 h-2 rounded-full bg-[#5A8F7B]" />
+                )}
+              </button>
+            ))}
+            <button
+              onClick={() => setShowPaymentPicker(false)}
+              className="w-full py-3 mt-2 rounded-lg text-sm font-medium text-[#8C8678]"
+              style={{ backgroundColor: "#F0EDE5" }}
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

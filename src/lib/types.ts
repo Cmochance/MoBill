@@ -6,7 +6,8 @@ export interface Expense {
   expenseDate: string; // YYYY-MM-DD
   expenseTime: string; // HH:mm
   createdAt: string;
-  type: 'expense' | 'income';
+  type: "expense" | "income";
+  paymentMethod?: "wechat" | "alipay" | "other";
 }
 
 export interface Category {
@@ -50,4 +51,4 @@ export interface MonthlySummary {
   budgetProgress?: number;
 }
 
-export type ViewTab = 'home' | 'add' | 'stats' | 'calendar' | 'settings';
+export type ViewTab = "home" | "add" | "stats" | "calendar" | "settings";

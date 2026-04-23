@@ -189,6 +189,7 @@ export const storage = {
     const migrated = items.map((e: any) => ({
       ...e,
       type: e.type || "expense",
+      paymentMethod: e.paymentMethod || "other",
     }));
     return migrated;
   },
