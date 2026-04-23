@@ -1,17 +1,25 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { exportToCSV } from "@/lib/data";
+import { useState, useRef, useMemo } from "react";
+import {
+  format,
+  subMonths,
+  startOfMonth,
+  endOfMonth,
+  parseISO,
+} from "date-fns";
+import { getStreakDays, getMonthlyIncome, getExpenses } from "@/lib/data";
 import {
   exportAllData,
   importAllData,
   syncApi,
   clearAllData,
+  storage,
 } from "@/lib/storage";
 import {
-  Download,
   Trash2,
   ChevronRight,
+  ChevronLeft,
   Cloud,
   Grid3x3,
   Bell,
@@ -22,7 +30,37 @@ import {
   FileJson,
   FolderSync,
   RefreshCw,
+  Wallet,
 } from "lucide-react";
+
+const DEFAULT_ASSET_ACCOUNTS = [
+  { name: "支付宝", amount: 0 },
+  { name: "微信", amount: 0 },
+  { name: "银行卡", amount: 0 },
+  { name: "现金", amount: 0 },
+  { name: "股票基金", amount: 0 },
+  { name: "数字人民币", amount: 0 },
+  { name: "京东钱包", amount: 0 },
+  { name: "其他", amount: 0 },
+];
+
+function getAssetAccounts(): Array<{ name: string; amount: number }> {
+  const s = storage.getSettings();
+  const accounts = s.assetAccounts as
+    | Array<{ name: string; amount: number }>
+    | undefined;
+  if (!accounts || accounts.length === 0) {
+    return DEFAULT_ASSET_ACCOUNTS.map((a) => ({ ...a }));
+  }
+  return accounts;
+}
+
+function saveAssetAccounts(accounts: Array<{ name: string; amount: number }>) {
+  storage.setSettings({
+    ...storage.getSettings(),
+    assetAccounts: accounts,
+  });
+}
 
 export default function ProfileView() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -33,24 +71,64 @@ export default function ProfileView() {
   const [syncEnabled, setSyncEnabled] = useState(
     () => syncApi.getConfig().enabled,
   );
+  const [nickname, setNickname] = useState(() => {
+    const s = storage.getSettings();
+    return s.nickname || "青岚";
+  });
+  const [editingName, setEditingName] = useState(false);
+  const [editValue, setEditValue] = useState("");
+  const [showAssetManager, setShowAssetManager] = useState(false);
+  const [assetAccounts, setAssetAccounts] = useState(() => getAssetAccounts());
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const streakDays = getStreakDays();
+
+  const today = new Date();
+  const thisMonth = format(today, "yyyy-MM");
+  const lastMonth = format(subMonths(today, 1), "yyyy-MM");
+
+  const thisMonthIncome = getMonthlyIncome(thisMonth);
+  const thisMonthExpenses = getExpenses()
+    .filter((e) => {
+      const ed = parseISO(e.expenseDate);
+      return (
+        e.type === "expense" &&
+        ed >= startOfMonth(today) &&
+        ed <= endOfMonth(today)
+      );
+    })
+    .reduce((sum, e) => sum + e.amount, 0);
+  const thisMonthBalance = thisMonthIncome - thisMonthExpenses;
+
+  const lastMonthDate = subMonths(today, 1);
+  const lastMonthIncome = getMonthlyIncome(lastMonth);
+  const lastMonthExpenses = getExpenses()
+    .filter((e) => {
+      const ed = parseISO(e.expenseDate);
+      return (
+        e.type === "expense" &&
+        ed >= startOfMonth(lastMonthDate) &&
+        ed <= endOfMonth(lastMonthDate)
+      );
+    })
+    .reduce((sum, e) => sum + e.amount, 0);
+  const lastMonthBalance = lastMonthIncome - lastMonthExpenses;
+
+  const balanceDiffPct =
+    lastMonthBalance !== 0
+      ? ((thisMonthBalance - lastMonthBalance) / Math.abs(lastMonthBalance)) *
+        100
+      : thisMonthBalance > 0
+        ? 100
+        : 0;
+
+  const totalAssets = assetAccounts.reduce(
+    (sum, a) => sum + (a.amount || 0),
+    0,
+  );
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 2500);
-  };
-
-  const handleExportCSV = () => {
-    const csv = exportToCSV();
-    const blob = new Blob(["\uFEFF" + csv], {
-      type: "text/csv;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `墨禅记账_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   const handleExportJSON = () => {
@@ -111,7 +189,6 @@ export default function ProfileView() {
   };
 
   const menuItems = [
-    { icon: Download, label: "导出 CSV 账单", action: handleExportCSV },
     { icon: FileJson, label: "备份数据 (JSON)", action: handleExportJSON },
     { icon: Upload, label: "恢复数据 (JSON)", action: handleImportClick },
     { icon: Grid3x3, label: "分类管理", action: () => {} },
@@ -120,11 +197,127 @@ export default function ProfileView() {
     { icon: Info, label: "关于我们", action: () => {} },
   ];
 
+  if (showAssetManager) {
+    return (
+      <div className="pb-24 px-4 pt-4 space-y-4">
+        {/* Asset Manager Header */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowAssetManager(false)}
+            className="p-2 -ml-2"
+          >
+            <ChevronLeft size={24} className="text-[#3D3D3D]" />
+          </button>
+          <span className="text-lg font-bold text-[#3D3D3D]">资产管理</span>
+        </div>
+
+        {/* Asset Accounts List */}
+        <div
+          className="rounded-xl shadow-sm overflow-hidden"
+          style={{
+            backgroundImage: "url(/card-2.png)",
+            backgroundSize: "100% 100%",
+            backgroundRepeat: "no-repeat",
+          }}
+        >
+          {assetAccounts.map((account, index) => (
+            <div
+              key={account.name}
+              className="flex items-center justify-between px-4 py-3.5"
+              style={{
+                borderBottom:
+                  index < assetAccounts.length - 1
+                    ? "1px solid rgba(232, 228, 218, 0.5)"
+                    : "none",
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: "#5A8F7B18" }}
+                >
+                  <Wallet size={16} className="text-[#5A8F7B]" />
+                </div>
+                <span className="text-sm text-[#3D3D3D]">{account.name}</span>
+              </div>
+              <input
+                type="number"
+                value={account.amount || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setAssetAccounts((prev) => {
+                    const next = [...prev];
+                    next[index] = {
+                      ...next[index],
+                      amount: val ? parseFloat(val) : 0,
+                    };
+                    return next;
+                  });
+                }}
+                placeholder="0.00"
+                className="text-right text-sm font-medium text-[#3D3D3D] bg-transparent outline-none w-24"
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Total & Save */}
+        <div
+          className="rounded-xl p-4 shadow-sm flex items-center justify-between"
+          style={{
+            backgroundImage: "url(/card-2.png)",
+            backgroundSize: "100% 100%",
+            backgroundRepeat: "no-repeat",
+          }}
+        >
+          <div>
+            <div className="text-xs text-[#8C8678]">总资产</div>
+            <div className="text-xl font-bold text-[#5A8F7B] mt-0.5">
+              ¥
+              {assetAccounts
+                .reduce((sum, a) => sum + (a.amount || 0), 0)
+                .toLocaleString("zh-CN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              saveAssetAccounts(assetAccounts);
+              showToast("资产已保存");
+              setShowAssetManager(false);
+            }}
+            className="px-5 py-2.5 rounded-lg text-sm font-medium text-white"
+            style={{ backgroundColor: "#5A8F7B" }}
+          >
+            保存
+          </button>
+        </div>
+
+        {toast && (
+          <div className="fixed top-12 left-0 right-0 z-[70] flex justify-center px-4 pointer-events-none">
+            <div
+              className="px-4 py-2.5 rounded-full text-sm font-medium shadow-lg"
+              style={{
+                backgroundColor:
+                  toast.type === "success" ? "#5A8F7B" : "#C45C4A",
+                color: "#FFF",
+              }}
+            >
+              {toast.msg}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="pb-24 px-4 pt-4 space-y-4">
       {/* User Header */}
       <div className="flex items-center gap-4">
-        <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-[#E8E4DA]">
+        <div className="w-16 h-16 rounded-full overflow-hidden">
           <img
             src="/topic-1-5.png"
             alt="头像"
@@ -133,15 +326,53 @@ export default function ProfileView() {
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-lg font-bold text-[#3D3D3D]">青岚</span>
-            <span
-              className="px-2 py-0.5 rounded-full text-[10px] font-medium text-white"
-              style={{ backgroundColor: "#C4954A" }}
-            >
-              VIP
-            </span>
+            {editingName ? (
+              <input
+                type="text"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={() => {
+                  const trimmed = editValue.trim();
+                  if (trimmed) {
+                    setNickname(trimmed);
+                    storage.setSettings({
+                      ...storage.getSettings(),
+                      nickname: trimmed,
+                    });
+                  }
+                  setEditingName(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const trimmed = editValue.trim();
+                    if (trimmed) {
+                      setNickname(trimmed);
+                      storage.setSettings({
+                        ...storage.getSettings(),
+                        nickname: trimmed,
+                      });
+                    }
+                    setEditingName(false);
+                  }
+                }}
+                autoFocus
+                className="text-lg font-bold bg-transparent outline-none border-b border-[#5A8F7B] text-[#3D3D3D] w-32"
+              />
+            ) : (
+              <button
+                onClick={() => {
+                  setEditValue(nickname);
+                  setEditingName(true);
+                }}
+                className="text-lg font-bold text-[#3D3D3D]"
+              >
+                {nickname}
+              </button>
+            )}
           </div>
-          <div className="text-xs text-[#8C8678] mt-0.5">已连续记账 128 天</div>
+          <div className="text-xs text-[#8C8678] mt-0.5">
+            已连续记账 {streakDays} 天
+          </div>
         </div>
         <button className="p-2">
           <Settings size={20} className="text-[#8C8678]" />
@@ -165,48 +396,38 @@ export default function ProfileView() {
           <div>
             <div className="text-xs text-[#8C8678]">本月结余</div>
             <div className="text-xl font-bold text-[#C4954A] mt-1">
-              ¥5,334.20
+              ¥
+              {thisMonthBalance.toLocaleString("zh-CN", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </div>
-            <div className="text-[10px] text-[#C45C4A] mt-0.5">
-              较上月 +12.6% ↗
+            <div
+              className={`text-[10px] mt-0.5 ${balanceDiffPct >= 0 ? "text-[#C45C4A]" : "text-[#5A8F7B]"}`}
+            >
+              较上月 {balanceDiffPct >= 0 ? "+" : ""}
+              {balanceDiffPct.toFixed(1)}% {balanceDiffPct >= 0 ? "↗" : "↘"}
             </div>
           </div>
           <div>
             <div className="text-xs text-[#8C8678]">账户总资产</div>
-            <div className="text-xl font-bold text-[#5A8F7B] mt-1">
-              ¥66,858.30
-            </div>
-            <div className="text-[10px] text-[#8C8678] mt-0.5">
-              净资产 ¥48,210.10
-            </div>
+            <button
+              onClick={() => setShowAssetManager(true)}
+              className="text-left"
+            >
+              <div className="text-xl font-bold text-[#5A8F7B] mt-1">
+                ¥
+                {totalAssets.toLocaleString("zh-CN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </div>
+              <div className="text-[10px] text-[#8C8678] mt-0.5">
+                点击管理资产
+              </div>
+            </button>
           </div>
         </div>
-      </div>
-
-      {/* Achievement Card */}
-      <div
-        className="rounded-xl p-4 shadow-sm flex items-center gap-4"
-        style={{
-          backgroundImage: "url(/card-2.png)",
-          backgroundSize: "100% 100%",
-          backgroundRepeat: "no-repeat",
-        }}
-      >
-        <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0">
-          <img
-            src="/topic-1-5.png"
-            alt="勋章"
-            className="w-full h-full object-cover"
-          />
-        </div>
-        <div className="flex-1">
-          <div className="text-sm font-medium text-[#3D3D3D]">精打细算</div>
-          <div className="text-xs text-[#8C8678] mt-0.5">本月记账 30 天</div>
-          <div className="text-xs text-[#8C8678]">
-            超过了 <span className="text-[#C45C4A]">78%</span> 的用户
-          </div>
-        </div>
-        <ChevronRight size={16} className="text-[#D0C8B8]" />
       </div>
 
       {/* Cloud Sync Card */}
@@ -322,7 +543,7 @@ export default function ProfileView() {
 
       {/* Version */}
       <div className="text-center py-2">
-        <span className="text-[10px] text-[#B5AE9E]">MoBill v1.1.1</span>
+        <span className="text-[10px] text-[#B5AE9E]">MoBill v1.1.2</span>
       </div>
 
       {/* Hidden file input for import */}

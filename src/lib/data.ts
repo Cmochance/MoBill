@@ -306,3 +306,22 @@ export function exportToCSV(): string {
   });
   return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
 }
+
+/** 计算连续记账天数（从今天往前连续有记录的天数） */
+export function getStreakDays(): number {
+  const expenses = getExpenses();
+  if (expenses.length === 0) return 0;
+  const dates = new Set(expenses.map((e) => e.expenseDate));
+  let streak = 0;
+  let current = new Date();
+  while (true) {
+    const dateStr = format(current, "yyyy-MM-dd");
+    if (dates.has(dateStr)) {
+      streak++;
+      current = subDays(current, 1);
+    } else {
+      break;
+    }
+  }
+  return streak;
+}

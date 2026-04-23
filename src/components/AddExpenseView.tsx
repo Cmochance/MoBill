@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Expense, Category } from "@/lib/types";
+import { Expense } from "@/lib/types";
 import { getCategories, addExpense } from "@/lib/data";
 import { format, parseISO } from "date-fns";
 import {
@@ -11,24 +11,65 @@ import {
   FileText,
   CreditCard,
   ChevronRight,
+  Wallet,
+  Briefcase,
+  ArrowLeftRight,
+  Gift,
+  TrendingUp,
+  Heart,
+  RotateCcw,
+  CircleDollarSign,
+  type LucideProps,
 } from "lucide-react";
 
 const PAYMENT_OPTIONS = [
-  { value: "wechat" as const, label: "微信支付" },
+  { value: "wechat" as const, label: "微信" },
   { value: "alipay" as const, label: "支付宝" },
+  { value: "bankcard" as const, label: "银行卡" },
   { value: "other" as const, label: "其他" },
 ];
 
+interface IncomeCategory {
+  id: string;
+  name: string;
+  icon: React.ComponentType<LucideProps>;
+  color: string;
+}
+
+const INCOME_CATEGORIES: IncomeCategory[] = [
+  { id: "salary", name: "工资", icon: Wallet, color: "#5A8F7B" },
+  { id: "sidejob", name: "副业", icon: Briefcase, color: "#C4954A" },
+  { id: "trade", name: "交易", icon: ArrowLeftRight, color: "#C45C4A" },
+  { id: "bonus", name: "奖金", icon: Gift, color: "#7A9AA8" },
+  { id: "investment", name: "理财", icon: TrendingUp, color: "#9B6B8A" },
+  { id: "redpacket", name: "红包", icon: Heart, color: "#C45C4A" },
+  { id: "refund", name: "退款", icon: RotateCcw, color: "#6B7B9B" },
+  {
+    id: "other_income",
+    name: "其他收入",
+    icon: CircleDollarSign,
+    color: "#8C8678",
+  },
+];
+
+interface ExpenseCategory {
+  id: string;
+  name: string;
+  iconImg: string;
+  color: string;
+}
+
 export default function AddExpenseView({ onBack }: { onBack: () => void }) {
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>(
+    [],
+  );
   const [selectedCat, setSelectedCat] = useState<string>("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [time, setTime] = useState(format(new Date(), "HH:mm"));
   const [recordType, setRecordType] = useState<"expense" | "income">("expense");
   const [paymentMethod, setPaymentMethod] = useState<
-    "wechat" | "alipay" | "other"
+    "wechat" | "alipay" | "bankcard" | "other"
   >("wechat");
   const [showPaymentPicker, setShowPaymentPicker] = useState(false);
   const [page, setPage] = useState(0);
@@ -36,9 +77,29 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     const cats = getCategories();
-    setCategories(cats);
-    if (cats.length > 0) setSelectedCat(cats[0].id);
+    const mapped = cats.map((c) => ({
+      id: c.id,
+      name: c.name,
+      iconImg: c.iconImg,
+      color: c.color,
+    }));
+    setExpenseCategories(mapped);
+    if (recordType === "expense" && mapped.length > 0) {
+      setSelectedCat(mapped[0].id);
+    } else if (recordType === "income" && INCOME_CATEGORIES.length > 0) {
+      setSelectedCat(INCOME_CATEGORIES[0].id);
+    }
   }, []);
+
+  // 切换收支类型时重置选中分类
+  useEffect(() => {
+    if (recordType === "expense" && expenseCategories.length > 0) {
+      setSelectedCat(expenseCategories[0].id);
+    } else if (recordType === "income" && INCOME_CATEGORIES.length > 0) {
+      setSelectedCat(INCOME_CATEGORIES[0].id);
+    }
+    setPage(0);
+  }, [recordType, expenseCategories]);
 
   const handleSubmit = () => {
     const num = parseFloat(amount);
@@ -49,10 +110,10 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
       categoryId: selectedCat,
       description,
       expenseDate: date,
-      expenseTime: time,
+      expenseTime: "12:00",
       createdAt: new Date().toISOString(),
       type: recordType,
-      paymentMethod,
+      paymentMethod: recordType === "expense" ? paymentMethod : undefined,
     };
     addExpense(expense);
     setAmount("");
@@ -61,14 +122,16 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
   };
 
   const catsPerPage = 8;
-  const totalPages = Math.ceil(categories.length / catsPerPage);
-  const pageCats = categories.slice(
+  const currentCats =
+    recordType === "expense" ? expenseCategories : INCOME_CATEGORIES;
+  const totalPages = Math.ceil(currentCats.length / catsPerPage);
+  const pageCats = currentCats.slice(
     page * catsPerPage,
     (page + 1) * catsPerPage,
   );
 
   const paymentLabel =
-    PAYMENT_OPTIONS.find((p) => p.value === paymentMethod)?.label || "微信支付";
+    PAYMENT_OPTIONS.find((p) => p.value === paymentMethod)?.label || "微信";
 
   return (
     <div className="pb-24 px-4 pt-4 space-y-4">
@@ -165,30 +228,63 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
         }}
       >
         <div className="grid grid-cols-4 gap-3">
-          {pageCats.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setSelectedCat(cat.id)}
-              className="flex flex-col items-center gap-1.5 p-2 rounded-md transition-all"
-            >
-              <div
-                className="w-12 h-12 rounded-full overflow-hidden transition-all"
-                style={{
-                  boxShadow:
-                    selectedCat === cat.id ? `0 0 0 2px ${cat.color}` : "none",
-                }}
-              >
-                <img
-                  src={cat.iconImg}
-                  alt={cat.name}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <span className="text-xs" style={{ color: "#555" }}>
-                {cat.name}
-              </span>
-            </button>
-          ))}
+          {recordType === "expense"
+            ? pageCats.map((cat) => {
+                const ec = cat as ExpenseCategory;
+                return (
+                  <button
+                    key={ec.id}
+                    onClick={() => setSelectedCat(ec.id)}
+                    className="flex flex-col items-center gap-1.5 p-2 rounded-md transition-all"
+                  >
+                    <div
+                      className="w-12 h-12 rounded-full overflow-hidden transition-all"
+                      style={{
+                        boxShadow:
+                          selectedCat === ec.id
+                            ? `0 0 0 2px ${ec.color}`
+                            : "none",
+                      }}
+                    >
+                      <img
+                        src={ec.iconImg}
+                        alt={ec.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <span className="text-xs" style={{ color: "#555" }}>
+                      {ec.name}
+                    </span>
+                  </button>
+                );
+              })
+            : pageCats.map((cat) => {
+                const ic = cat as IncomeCategory;
+                const Icon = ic.icon;
+                return (
+                  <button
+                    key={ic.id}
+                    onClick={() => setSelectedCat(ic.id)}
+                    className="flex flex-col items-center gap-1.5 p-2 rounded-md transition-all"
+                  >
+                    <div
+                      className="w-12 h-12 rounded-full flex items-center justify-center transition-all"
+                      style={{
+                        backgroundColor: `${ic.color}18`,
+                        boxShadow:
+                          selectedCat === ic.id
+                            ? `0 0 0 2px ${ic.color}`
+                            : "none",
+                      }}
+                    >
+                      <Icon size={22} color={ic.color} strokeWidth={2} />
+                    </div>
+                    <span className="text-xs" style={{ color: "#555" }}>
+                      {ic.name}
+                    </span>
+                  </button>
+                );
+              })}
         </div>
         {/* Pagination Dots */}
         {totalPages > 1 && (
@@ -243,23 +339,6 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
           />
         </div>
 
-        {/* Time */}
-        <div
-          className="flex items-center justify-between py-2"
-          style={{ borderBottom: "1px solid rgba(232, 228, 218, 0.5)" }}
-        >
-          <div className="flex items-center gap-3">
-            <Calendar size={18} className="text-[#8C8678]" />
-            <span className="text-sm text-[#3D3D3D]">时间</span>
-          </div>
-          <input
-            type="time"
-            value={time}
-            onChange={(e) => setTime(e.target.value)}
-            className="text-sm text-right bg-transparent outline-none text-[#8C8678]"
-          />
-        </div>
-
         {/* Description */}
         <div
           className="flex items-center justify-between py-2"
@@ -282,11 +361,13 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
           </div>
         </div>
 
-        {/* Payment Method */}
+        {/* Payment / Income Method */}
         <div className="flex items-center justify-between py-2">
           <div className="flex items-center gap-3">
             <CreditCard size={18} className="text-[#8C8678]" />
-            <span className="text-sm text-[#3D3D3D]">支付方式</span>
+            <span className="text-sm text-[#3D3D3D]">
+              {recordType === "expense" ? "支付方式" : "入账方式"}
+            </span>
           </div>
           <button
             onClick={() => setShowPaymentPicker(true)}

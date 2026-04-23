@@ -33,9 +33,9 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
+  AreaChart,
+  Area,
+  CartesianGrid,
 } from "recharts";
 
 export default function HomeView({ onAdd }: { onAdd: () => void }) {
@@ -228,15 +228,22 @@ export default function HomeView({ onAdd }: { onAdd: () => void }) {
               <span className="text-xs font-medium text-[#3D3D3D]">
                 支出趋势
               </span>
-              <button
-                className="flex items-center gap-0.5 text-[10px] text-[#8C8678] px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: "rgba(240, 237, 229, 0.6)" }}
-              >
-                按日 <ChevronDown size={10} />
-              </button>
             </div>
             <ResponsiveContainer width="100%" height={120}>
-              <LineChart data={lineData}>
+              <AreaChart data={lineData}>
+                <defs>
+                  <linearGradient
+                    id="homeTrendColor"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop offset="5%" stopColor="#5A8F7B" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#5A8F7B" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis
                   dataKey="name"
                   axisLine={false}
@@ -256,19 +263,19 @@ export default function HomeView({ onAdd }: { onAdd: () => void }) {
                     fontSize: 12,
                   }}
                 />
-                <Line
+                <Area
                   type="monotone"
                   dataKey="amount"
                   stroke="#5A8F7B"
                   strokeWidth={1.5}
-                  dot={false}
-                  fillOpacity={0.1}
+                  fillOpacity={1}
+                  fill="url(#homeTrendColor)"
                 />
-              </LineChart>
+              </AreaChart>
             </ResponsiveContainer>
           </div>
 
-          {/* Pie Chart */}
+          {/* Category Breakdown */}
           <div
             className="rounded-xl p-3 shadow-sm"
             style={{
@@ -277,64 +284,24 @@ export default function HomeView({ onAdd }: { onAdd: () => void }) {
               backgroundRepeat: "no-repeat",
             }}
           >
-            <div className="text-xs font-medium text-[#3D3D3D] mb-1">
-              支出分类占比
+            <div className="text-xs font-medium text-[#3D3D3D] mb-2">
+              支出占比
             </div>
-            <div className="flex items-center">
-              <div className="flex-1">
-                <ResponsiveContainer width="100%" height={100}>
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={28}
-                      outerRadius={42}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                {topCategory && (
-                  <div className="text-center -mt-1">
-                    <div className="text-sm font-bold text-[#3D3D3D]">
-                      {((topCategory.value / totalPie) * 100).toFixed(0)}%
-                    </div>
-                    <div className="text-[10px] text-[#8C8678]">
-                      {topCategory.name}
-                    </div>
+            <div className="space-y-2">
+              {pieData.slice(0, 6).map((d) => (
+                <div key={d.name} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: d.color }}
+                    />
+                    <span className="text-xs text-[#6B6658]">{d.name}</span>
                   </div>
-                )}
-              </div>
-              <div
-                className="w-[1px] h-16 mx-1"
-                style={{ backgroundColor: "#E8E4DA" }}
-              />
-              <div className="flex-1 space-y-1.5">
-                {pieData.slice(0, 5).map((d) => (
-                  <div
-                    key={d.name}
-                    className="flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-1">
-                      <div
-                        className="w-2 h-2 rounded-full"
-                        style={{ backgroundColor: d.color }}
-                      />
-                      <span className="text-[10px] text-[#6B6658]">
-                        {d.name}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-[#8C8678]">
-                      {((d.value / totalPie) * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                ))}
-              </div>
+                  <span className="text-xs text-[#8C8678]">
+                    {((d.value / totalPie) * 100).toFixed(0)}%
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>

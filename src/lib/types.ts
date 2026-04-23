@@ -7,7 +7,7 @@ export interface Expense {
   expenseTime: string; // HH:mm
   createdAt: string;
   type: "expense" | "income";
-  paymentMethod?: "wechat" | "alipay" | "other";
+  paymentMethod?: "wechat" | "alipay" | "bankcard" | "other";
 }
 
 export interface Category {

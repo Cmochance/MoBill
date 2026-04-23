@@ -198,7 +198,7 @@ export const storage = {
   setCategories: (v: any[]) => setItem(STORAGE_KEYS.CATEGORIES, v),
   getBudgets: () => getItem(STORAGE_KEYS.BUDGETS, [] as any[]),
   setBudgets: (v: any[]) => setItem(STORAGE_KEYS.BUDGETS, v),
-  getSettings: () => getItem(STORAGE_KEYS.SETTINGS, {}),
+  getSettings: () => getItem<Record<string, any>>(STORAGE_KEYS.SETTINGS, {}),
   setSettings: (v: any) => setItem(STORAGE_KEYS.SETTINGS, v),
 };
 
