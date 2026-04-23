@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Expense, Category } from "@/lib/types";
 import {
   getMonthlySummary,
+  getMonthlyIncome,
   getRecentExpenses,
   getCategories,
   getExpenses,
@@ -52,21 +53,27 @@ export default function HomeView({ onAdd }: { onAdd: () => void }) {
   );
   const recent = useMemo(() => getRecentExpenses(6), [refresh]);
 
-  // Mock income based on expenses for UI display
-  const income = useMemo(() => {
-    const prevMonth = format(subMonths(parseISO(today), 1), "yyyy-MM");
-    const prev = getMonthlySummary(prevMonth);
-    return monthSummary.total * 2.63 + prev.total * 0.1;
-  }, [monthSummary.total, today, refresh]);
-  const balance = income - monthSummary.total;
-  const prevMonth = useMemo(
-    () => getMonthlySummary(format(subMonths(parseISO(today), 1), "yyyy-MM")),
+  // 真实收入、支出、结余计算
+  const income = useMemo(
+    () => getMonthlyIncome(format(parseISO(today), "yyyy-MM")),
     [today, refresh],
   );
+  const expenseTotal = monthSummary.total;
+  const balance = income - expenseTotal;
+  const prevMonthStr = format(subMonths(parseISO(today), 1), "yyyy-MM");
+  const prevIncome = useMemo(
+    () => getMonthlyIncome(prevMonthStr),
+    [prevMonthStr, refresh],
+  );
+  const prevExpense = useMemo(
+    () => getMonthlySummary(prevMonthStr),
+    [prevMonthStr, refresh],
+  );
+  const prevBalance = prevIncome - prevExpense.total;
   const balanceChange =
-    prevMonth.total > 0
-      ? ((balance - prevMonth.total * 1.6) / (prevMonth.total * 1.6)) * 100
-      : 12.6;
+    prevBalance !== 0
+      ? ((balance - prevBalance) / Math.abs(prevBalance)) * 100
+      : 0;
 
   const handleDelete = (id: string) => {
     if (confirm("确定删除这笔记录吗？")) {

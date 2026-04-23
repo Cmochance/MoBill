@@ -94,7 +94,7 @@ export default function StatsView() {
     .filter((d) => d.value > 0);
   const totalPie = pieData.reduce((s, d) => s + d.value, 0);
 
-  // Mock income/expense comparison data
+  // 月度收支对比数据（真实数据）
   const compareData = useMemo(() => {
     const expenses = getExpenses();
     const months: { name: string; income: number; expense: number }[] = [];
@@ -114,12 +114,9 @@ export default function StatsView() {
       });
       const expTotal = monthExpenses.reduce((sum, ex) => sum + ex.amount, 0);
       const incTotal = monthIncome.reduce((sum, ex) => sum + ex.amount, 0);
-      // Mock income if no real income data
-      const finalIncome =
-        incTotal > 0 ? incTotal : expTotal * 1.5 + Math.random() * 2000;
       months.push({
         name: format(m, "M月"),
-        income: Math.round(finalIncome),
+        income: Math.round(incTotal),
         expense: Math.round(expTotal),
       });
     }
@@ -254,11 +251,9 @@ export default function StatsView() {
       });
       const expTotal = monthExpenses.reduce((sum, ex) => sum + ex.amount, 0);
       const incTotal = monthIncome.reduce((sum, ex) => sum + ex.amount, 0);
-      const finalIncome =
-        incTotal > 0 ? incTotal : expTotal * 1.5 + Math.random() * 2000;
       months.push({
         name: format(m, "M月"),
-        income: Math.round(finalIncome),
+        income: Math.round(incTotal),
         expense: Math.round(expTotal),
       });
     }

@@ -1,11 +1,11 @@
-import { CapacitorConfig } from '@capacitor/cli';
+import { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: 'com.mochan.billing',
-  appName: 'Mochan Billing',
-  webDir: 'dist',
+  appId: "com.mochan.billing",
+  appName: "MoBill",
+  webDir: "dist",
   server: {
-    androidScheme: 'https',
+    androidScheme: "https",
   },
 };
 

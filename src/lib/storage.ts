@@ -272,3 +272,34 @@ export function importAllData(json: string): {
     return { success: false, message: "文件解析失败，请检查备份文件" };
   }
 }
+
+/** 彻底清空所有数据（localStorage + Preferences + 缓存 + 外部文件） */
+export async function clearAllData(): Promise<void> {
+  // 1. 清空内存缓存
+  for (const key of Object.keys(cache)) {
+    delete cache[key];
+  }
+
+  // 2. 清空 Preferences
+  for (const key of Object.values(STORAGE_KEYS)) {
+    await Preferences.remove({ key }).catch(() => {});
+  }
+
+  // 3. 清空 localStorage
+  if (typeof window !== "undefined") {
+    localStorage.clear();
+  }
+
+  // 4. 删除外部同步文件（若启用）
+  const cfg = getSyncConfig();
+  if (cfg.enabled) {
+    try {
+      await Filesystem.deleteFile({
+        path: cfg.path,
+        directory: Directory.Documents,
+      });
+    } catch {
+      /* 文件可能不存在，忽略 */
+    }
+  }
+}

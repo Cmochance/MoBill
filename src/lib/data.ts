@@ -94,7 +94,6 @@ function initCategories(): Category[] {
   const cats = storage.getCategories();
   if (cats.length === 0) {
     storage.setCategories(DEFAULT_CATEGORIES);
-    seedSampleData();
     return DEFAULT_CATEGORIES;
   }
   // 强制同步默认分类的颜色（样式更新时生效）
@@ -116,58 +115,6 @@ function initCategories(): Category[] {
   });
   if (changed) storage.setCategories(merged);
   return changed ? merged : cats;
-}
-
-function seedSampleData() {
-  const expenses: Expense[] = [];
-  const now = new Date();
-  const categories = [
-    "food",
-    "transport",
-    "shopping",
-    "entertainment",
-    "housing",
-    "utilities",
-  ];
-  const descriptions: Record<string, string[]> = {
-    food: ["早餐", "午餐", "晚餐", "奶茶", "水果"],
-    transport: ["地铁", "公交", "打车", "加油"],
-    shopping: ["超市", "日用品", "衣服", "电子产品"],
-    entertainment: ["电影", "游戏", "KTV", "聚餐"],
-    housing: ["房租", "物业费"],
-    utilities: ["水电费", "燃气费", "网费"],
-  };
-  // Generate data for past 30 days
-  for (let i = 0; i < 45; i++) {
-    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-    const dateStr = format(date, "yyyy-MM-dd");
-    const numExpenses = Math.floor(Math.random() * 3) + (i < 3 ? 2 : 0);
-    for (let j = 0; j < numExpenses; j++) {
-      const cat = categories[Math.floor(Math.random() * categories.length)];
-      const descs = descriptions[cat];
-      const desc = descs[Math.floor(Math.random() * descs.length)];
-      const hour = 7 + Math.floor(Math.random() * 15);
-      const minute = Math.floor(Math.random() * 60);
-      expenses.push({
-        id: `sample_${i}_${j}_${Date.now()}`,
-        amount: Math.round((Math.random() * 150 + 10) * 100) / 100,
-        categoryId: cat,
-        description: desc,
-        expenseDate: dateStr,
-        expenseTime: `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`,
-        createdAt: new Date().toISOString(),
-        type: "expense",
-      });
-    }
-  }
-  storage.setExpenses(expenses);
-  // Set a monthly budget
-  const budget: MonthlyBudget = {
-    id: "budget_sample",
-    yearMonth: format(now, "yyyy-MM"),
-    totalBudget: 5000,
-  };
-  storage.setBudgets([budget]);
 }
 
 export function getCategories(): Category[] {
@@ -308,6 +255,19 @@ export function getMonthlySummary(yearMonth: string): MonthlySummary {
     ),
     budgetProgress: budget > 0 ? total / budget : undefined,
   };
+}
+
+/** 计算指定月份的真实收入总额 */
+export function getMonthlyIncome(yearMonth: string): number {
+  const [year, month] = yearMonth.split("-").map(Number);
+  const start = startOfMonth(new Date(year, month - 1));
+  const end = endOfMonth(new Date(year, month - 1));
+  return getExpenses()
+    .filter((e) => {
+      const ed = parseISO(e.expenseDate);
+      return e.type === "income" && ed >= start && ed <= end;
+    })
+    .reduce((sum, e) => sum + e.amount, 0);
 }
 
 export function getRecentExpenses(limit: number = 10): Expense[] {

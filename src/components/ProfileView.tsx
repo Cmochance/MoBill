@@ -2,7 +2,12 @@
 
 import { useState, useRef } from "react";
 import { exportToCSV } from "@/lib/data";
-import { exportAllData, importAllData, syncApi } from "@/lib/storage";
+import {
+  exportAllData,
+  importAllData,
+  syncApi,
+  clearAllData,
+} from "@/lib/storage";
 import {
   Download,
   Trash2,
@@ -82,11 +87,9 @@ export default function ProfileView() {
     e.target.value = "";
   };
 
-  const handleReset = () => {
-    if (typeof window !== "undefined") {
-      localStorage.clear();
-      window.location.reload();
-    }
+  const handleReset = async () => {
+    await clearAllData();
+    window.location.reload();
   };
 
   const toggleSync = async () => {
