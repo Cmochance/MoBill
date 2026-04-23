@@ -1,26 +1,81 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+    --background: #f5f0e8;
+    --foreground: #3d3d3d;
+    --card: #faf8f3;
+    --card-border: #e8e4da;
+    --primary: #5a8f7b;
+    --primary-light: #e8f0ec;
+    --accent-red: #c45c4a;
+    --accent-gold: #c4954a;
+    --text-muted: #8c8678;
+    --text-secondary: #6b6658;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-primary: var(--primary);
+    --color-accent-red: var(--accent-red);
+    --color-accent-gold: var(--accent-gold);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+    background-image: url("/bg.png");
+    background-size: 100% auto;
+    background-position: center top;
+    background-repeat: no-repeat;
+    background-color: #f5f0e8;
+    color: var(--foreground);
+    font-family:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+        Arial, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    overscroll-behavior-y: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+input[type="date"],
+input[type="time"] {
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+/* Glassmorphism cards */
+.glass-card {
+    background-color: rgba(250, 248, 243, 0.78);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(232, 228, 218, 0.5);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.glass-card-strong {
+    background-color: rgba(250, 248, 243, 0.88);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(232, 228, 218, 0.55);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
 }
