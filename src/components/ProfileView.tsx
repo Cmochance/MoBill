@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { exportToCSV } from "@/lib/data";
+import { exportAllData, importAllData, syncApi } from "@/lib/storage";
 import {
   Download,
   Trash2,
@@ -12,12 +13,29 @@ import {
   Palette,
   Info,
   Settings,
+  Upload,
+  FileJson,
+  FolderSync,
+  RefreshCw,
 } from "lucide-react";
 
 export default function ProfileView() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [toast, setToast] = useState<{
+    msg: string;
+    type: "success" | "error";
+  } | null>(null);
+  const [syncEnabled, setSyncEnabled] = useState(
+    () => syncApi.getConfig().enabled,
+  );
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleExport = () => {
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 2500);
+  };
+
+  const handleExportCSV = () => {
     const csv = exportToCSV();
     const blob = new Blob(["\uFEFF" + csv], {
       type: "text/csv;charset=utf-8;",
@@ -30,6 +48,40 @@ export default function ProfileView() {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportJSON = () => {
+    const json = exportAllData();
+    const blob = new Blob([json], { type: "application/json;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `墨禅记账备份_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("备份文件已下载");
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const result = importAllData(text);
+      if (result.success) {
+        showToast(result.message, "success");
+        setTimeout(() => window.location.reload(), 800);
+      } else {
+        showToast(result.message, "error");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
   const handleReset = () => {
     if (typeof window !== "undefined") {
       localStorage.clear();
@@ -37,8 +89,28 @@ export default function ProfileView() {
     }
   };
 
+  const toggleSync = async () => {
+    const next = !syncEnabled;
+    const result = await syncApi.setEnabled(next);
+    if (result.success) {
+      setSyncEnabled(next);
+      showToast(result.message, "success");
+      if (next) setTimeout(() => window.location.reload(), 600);
+    } else {
+      showToast(result.message, "error");
+    }
+  };
+
+  const handleReloadExternal = async () => {
+    const result = await syncApi.reloadFromExternal();
+    showToast(result.message, result.success ? "success" : "error");
+    if (result.success) setTimeout(() => window.location.reload(), 600);
+  };
+
   const menuItems = [
-    { icon: Cloud, label: "数据同步 / 导出", action: handleExport },
+    { icon: Download, label: "导出 CSV 账单", action: handleExportCSV },
+    { icon: FileJson, label: "备份数据 (JSON)", action: handleExportJSON },
+    { icon: Upload, label: "恢复数据 (JSON)", action: handleImportClick },
     { icon: Grid3x3, label: "分类管理", action: () => {} },
     { icon: Bell, label: "账单提醒", action: () => {} },
     { icon: Palette, label: "主题设置", action: () => {} },
@@ -134,6 +206,67 @@ export default function ProfileView() {
         <ChevronRight size={16} className="text-[#D0C8B8]" />
       </div>
 
+      {/* Cloud Sync Card */}
+      <div
+        className="rounded-xl p-4 shadow-sm"
+        style={{
+          backgroundImage: "url(/card-2.png)",
+          backgroundSize: "100% 100%",
+          backgroundRepeat: "no-repeat",
+        }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-4 rounded-full bg-[#5A8F7B]" />
+            <span className="text-sm font-medium" style={{ color: "#3D3D3D" }}>
+              云盘同步
+            </span>
+          </div>
+          <button
+            onClick={toggleSync}
+            className="relative w-11 h-6 rounded-full transition-colors"
+            style={{
+              backgroundColor: syncEnabled ? "#5A8F7B" : "#D0C8B8",
+            }}
+          >
+            <div
+              className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform"
+              style={{
+                transform: syncEnabled ? "translateX(20px)" : "translateX(0)",
+              }}
+            />
+          </button>
+        </div>
+
+        {syncEnabled ? (
+          <>
+            <div className="text-xs text-[#8C8678] mb-2">
+              数据文件位置：{" "}
+              <span className="text-[#5A8F7B] font-medium">
+                {syncApi.getExternalPathHint()}
+              </span>
+            </div>
+            <div className="text-xs text-[#8C8678] mb-3 leading-relaxed">
+              将该文件夹添加到你的云盘同步目录，即可在多台设备间同步数据。
+              每次记账后数据会自动写入该文件。
+            </div>
+            <button
+              onClick={handleReloadExternal}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#5A8F7B]"
+              style={{ backgroundColor: "rgba(90,143,123,0.08)" }}
+            >
+              <RefreshCw size={12} />
+              从云盘文件重新加载
+            </button>
+          </>
+        ) : (
+          <div className="text-xs text-[#8C8678] leading-relaxed">
+            开启后，所有数据将保存到手机 Documents/MoBill/data.json，
+            你可以将该文件夹加入云盘同步，实现多设备数据互通。
+          </div>
+        )}
+      </div>
+
       {/* Menu List */}
       <div
         className="rounded-xl shadow-sm overflow-hidden"
@@ -184,6 +317,15 @@ export default function ProfileView() {
         </button>
       </div>
 
+      {/* Hidden file input for import */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json,application/json"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+
       {showResetConfirm && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center px-4"
@@ -215,6 +357,20 @@ export default function ProfileView() {
                 确认清除
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed top-12 left-0 right-0 z-[70] flex justify-center px-4 pointer-events-none">
+          <div
+            className="px-4 py-2.5 rounded-full text-sm font-medium shadow-lg"
+            style={{
+              backgroundColor: toast.type === "success" ? "#5A8F7B" : "#C45C4A",
+              color: "#FFF",
+            }}
+          >
+            {toast.msg}
           </div>
         </div>
       )}

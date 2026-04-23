@@ -1,16 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ViewTab } from "@/lib/types";
 import HomeView from "@/components/HomeView";
 import AddExpenseView from "@/components/AddExpenseView";
 import StatsView from "@/components/StatsView";
 import BudgetView from "@/components/BudgetView";
 import ProfileView from "@/components/ProfileView";
+import { initStorage } from "@/lib/storage";
 import { Landmark, BarChart3, Wallet, User } from "lucide-react";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<ViewTab>("home");
+
+  useEffect(() => {
+    initStorage().catch(() => {});
+  }, []);
 
   const renderView = () => {
     switch (activeTab) {
@@ -44,9 +49,7 @@ export default function Home() {
       <div className="pb-24">{renderView()}</div>
 
       {/* Bottom Navigation */}
-      <nav
-        className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-50 glass-card-strong"
-      >
+      <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-50 glass-card-strong">
         <div className="relative flex items-center justify-around py-2">
           {mainTabs.slice(0, 2).map((tab) => {
             const isActive = activeTab === tab.id;
