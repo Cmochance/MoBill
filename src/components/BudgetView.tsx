@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState } from "react";
 import { Category } from "@/lib/types";
 import {
   getMonthlySummary,
@@ -13,24 +13,17 @@ import { ChevronRight, AlertCircle } from "lucide-react";
 
 export default function BudgetView() {
   const [today] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [budgetInput, setBudgetInput] = useState("");
-  const [refresh, setRefresh] = useState(0);
-
-  useEffect(() => {
-    setCategories(getCategories());
-    const budgets = getBudgets();
-    const current = budgets.find(
-      (b) => b.yearMonth === format(parseISO(today), "yyyy-MM"),
-    );
-    if (current) setBudgetInput(current.totalBudget.toString());
-  }, [today, refresh]);
-
+  const [categories] = useState<Category[]>(() => getCategories());
   const monthKey = format(parseISO(today), "yyyy-MM");
-  const monthSummary = useMemo(
-    () => getMonthlySummary(monthKey),
-    [monthKey, refresh],
+  const [budgetInput, setBudgetInput] = useState(
+    () =>
+      getBudgets()
+        .find((budget) => budget.yearMonth === monthKey)
+        ?.totalBudget.toString() || "",
   );
+  const [, setRefresh] = useState(0);
+
+  const monthSummary = getMonthlySummary(monthKey);
   const budgets = getBudgets();
   const currentBudget =
     budgets.find((b) => b.yearMonth === monthKey)?.totalBudget ?? 0;

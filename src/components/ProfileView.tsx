@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef } from "react";
 import {
   format,
   subMonths,
@@ -17,10 +17,7 @@ import {
   storage,
 } from "@/lib/storage";
 import {
-  Trash2,
   ChevronRight,
-  ChevronLeft,
-  Cloud,
   Grid3x3,
   Bell,
   Palette,
@@ -28,12 +25,15 @@ import {
   Settings,
   Upload,
   FileJson,
-  FolderSync,
   RefreshCw,
-  Wallet,
 } from "lucide-react";
+import {
+  AssetAccount,
+  AssetManagerView,
+} from "./profile/AssetManagerView";
+import { ProfileMenu, ProfileMenuItem } from "./profile/ProfileMenu";
 
-const DEFAULT_ASSET_ACCOUNTS = [
+const DEFAULT_ASSET_ACCOUNTS: AssetAccount[] = [
   { name: "支付宝", amount: 0 },
   { name: "微信", amount: 0 },
   { name: "银行卡", amount: 0 },
@@ -44,10 +44,10 @@ const DEFAULT_ASSET_ACCOUNTS = [
   { name: "其他", amount: 0 },
 ];
 
-function getAssetAccounts(): Array<{ name: string; amount: number }> {
+function getAssetAccounts(): AssetAccount[] {
   const s = storage.getSettings();
   const accounts = s.assetAccounts as
-    | Array<{ name: string; amount: number }>
+    | AssetAccount[]
     | undefined;
   if (!accounts || accounts.length === 0) {
     return DEFAULT_ASSET_ACCOUNTS.map((a) => ({ ...a }));
@@ -55,7 +55,7 @@ function getAssetAccounts(): Array<{ name: string; amount: number }> {
   return accounts;
 }
 
-function saveAssetAccounts(accounts: Array<{ name: string; amount: number }>) {
+function saveAssetAccounts(accounts: AssetAccount[]) {
   storage.setSettings({
     ...storage.getSettings(),
     assetAccounts: accounts,
@@ -188,128 +188,28 @@ export default function ProfileView() {
     if (result.success) setTimeout(() => window.location.reload(), 600);
   };
 
-  const menuItems = [
+  const menuItems: ProfileMenuItem[] = [
     { icon: FileJson, label: "备份数据 (JSON)", action: handleExportJSON },
     { icon: Upload, label: "恢复数据 (JSON)", action: handleImportClick },
-    { icon: Grid3x3, label: "分类管理", action: () => {} },
-    { icon: Bell, label: "账单提醒", action: () => {} },
-    { icon: Palette, label: "主题设置", action: () => {} },
-    { icon: Info, label: "关于我们", action: () => {} },
+    { icon: Grid3x3, label: "分类管理", disabled: true },
+    { icon: Bell, label: "账单提醒", disabled: true },
+    { icon: Palette, label: "主题设置", disabled: true },
+    { icon: Info, label: "关于我们", disabled: true },
   ];
 
   if (showAssetManager) {
     return (
-      <div className="pb-24 px-4 pt-4 space-y-4">
-        {/* Asset Manager Header */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowAssetManager(false)}
-            className="p-2 -ml-2"
-          >
-            <ChevronLeft size={24} className="text-[#3D3D3D]" />
-          </button>
-          <span className="text-lg font-bold text-[#3D3D3D]">资产管理</span>
-        </div>
-
-        {/* Asset Accounts List */}
-        <div
-          className="rounded-xl shadow-sm overflow-hidden"
-          style={{
-            backgroundImage: "url(/card-2.png)",
-            backgroundSize: "100% 100%",
-            backgroundRepeat: "no-repeat",
-          }}
-        >
-          {assetAccounts.map((account, index) => (
-            <div
-              key={account.name}
-              className="flex items-center justify-between px-4 py-3.5"
-              style={{
-                borderBottom:
-                  index < assetAccounts.length - 1
-                    ? "1px solid rgba(232, 228, 218, 0.5)"
-                    : "none",
-              }}
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: "#5A8F7B18" }}
-                >
-                  <Wallet size={16} className="text-[#5A8F7B]" />
-                </div>
-                <span className="text-sm text-[#3D3D3D]">{account.name}</span>
-              </div>
-              <input
-                type="number"
-                value={account.amount || ""}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setAssetAccounts((prev) => {
-                    const next = [...prev];
-                    next[index] = {
-                      ...next[index],
-                      amount: val ? parseFloat(val) : 0,
-                    };
-                    return next;
-                  });
-                }}
-                placeholder="0.00"
-                className="text-right text-sm font-medium text-[#3D3D3D] bg-transparent outline-none w-24"
-              />
-            </div>
-          ))}
-        </div>
-
-        {/* Total & Save */}
-        <div
-          className="rounded-xl p-4 shadow-sm flex items-center justify-between"
-          style={{
-            backgroundImage: "url(/card-2.png)",
-            backgroundSize: "100% 100%",
-            backgroundRepeat: "no-repeat",
-          }}
-        >
-          <div>
-            <div className="text-xs text-[#8C8678]">总资产</div>
-            <div className="text-xl font-bold text-[#5A8F7B] mt-0.5">
-              ¥
-              {assetAccounts
-                .reduce((sum, a) => sum + (a.amount || 0), 0)
-                .toLocaleString("zh-CN", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              saveAssetAccounts(assetAccounts);
-              showToast("资产已保存");
-              setShowAssetManager(false);
-            }}
-            className="px-5 py-2.5 rounded-lg text-sm font-medium text-white"
-            style={{ backgroundColor: "#5A8F7B" }}
-          >
-            保存
-          </button>
-        </div>
-
-        {toast && (
-          <div className="fixed top-12 left-0 right-0 z-[70] flex justify-center px-4 pointer-events-none">
-            <div
-              className="px-4 py-2.5 rounded-full text-sm font-medium shadow-lg"
-              style={{
-                backgroundColor:
-                  toast.type === "success" ? "#5A8F7B" : "#C45C4A",
-                color: "#FFF",
-              }}
-            >
-              {toast.msg}
-            </div>
-          </div>
-        )}
-      </div>
+      <AssetManagerView
+        accounts={assetAccounts}
+        toast={toast}
+        onBack={() => setShowAssetManager(false)}
+        onAccountsChange={setAssetAccounts}
+        onSave={() => {
+          saveAssetAccounts(assetAccounts);
+          showToast("资产已保存");
+          setShowAssetManager(false);
+        }}
+      />
     );
   }
 
@@ -374,7 +274,7 @@ export default function ProfileView() {
             已连续记账 {streakDays} 天
           </div>
         </div>
-        <button className="p-2">
+        <button className="p-2 cursor-not-allowed opacity-45" disabled>
           <Settings size={20} className="text-[#8C8678]" />
         </button>
       </div>
@@ -491,55 +391,10 @@ export default function ProfileView() {
         )}
       </div>
 
-      {/* Menu List */}
-      <div
-        className="rounded-xl shadow-sm overflow-hidden"
-        style={{
-          backgroundImage: "url(/card-2.png)",
-          backgroundSize: "100% 100%",
-          backgroundRepeat: "no-repeat",
-        }}
-      >
-        {menuItems.map((item, index) => (
-          <button
-            key={item.label}
-            onClick={item.action}
-            className="w-full flex items-center justify-between px-4 py-3.5 active:bg-[#F5F0E8] transition-colors"
-            style={{
-              borderBottom:
-                index < menuItems.length - 1
-                  ? "1px solid rgba(232, 228, 218, 0.5)"
-                  : "none",
-            }}
-          >
-            <div className="flex items-center gap-3">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center"
-                style={{ backgroundColor: "#5A8F7B18" }}
-              >
-                <item.icon size={16} className="text-[#5A8F7B]" />
-              </div>
-              <span className="text-sm text-[#3D3D3D]">{item.label}</span>
-            </div>
-            <ChevronRight size={16} className="text-[#D0C8B8]" />
-          </button>
-        ))}
-        <button
-          onClick={() => setShowResetConfirm(true)}
-          className="w-full flex items-center justify-between px-4 py-3.5 active:bg-[#F5F0E8] transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: "#C45C4A18" }}
-            >
-              <Trash2 size={16} className="text-[#C45C4A]" />
-            </div>
-            <span className="text-sm text-[#3D3D3D]">清除所有数据</span>
-          </div>
-          <ChevronRight size={16} className="text-[#D0C8B8]" />
-        </button>
-      </div>
+      <ProfileMenu
+        items={menuItems}
+        onReset={() => setShowResetConfirm(true)}
+      />
 
       {/* Version */}
       <div className="text-center py-2">

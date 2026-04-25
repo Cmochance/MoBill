@@ -1,5 +1,6 @@
 import { Preferences } from "@capacitor/preferences";
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
+import { Category, Expense, MonthlyBudget } from "./types";
 
 const STORAGE_KEYS = {
   EXPENSES: "mochan_expenses",
@@ -10,11 +11,31 @@ const STORAGE_KEYS = {
 };
 
 const EXTERNAL_FILE = "MoBill/data.json";
+const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+export const EXTERNAL_SYNC_ERROR_EVENT = "mobill:external-sync-error";
 
-const cache: Record<string, any> = {};
+export interface AppSettings {
+  nickname?: string;
+  assetAccounts?: Array<{ name: string; amount: number }>;
+  [key: string]: unknown;
+}
+
+interface SyncPayload {
+  expenses?: Expense[];
+  categories?: Category[];
+  budgets?: MonthlyBudget[];
+  settings?: AppSettings;
+  updatedAt?: string;
+  appVersion?: string;
+}
+
+interface ExternalFileSnapshot {
+  raw: string;
+  payload: SyncPayload;
+}
+
+const cache: Record<string, unknown> = {};
 let initialized = false;
-let syncDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-const SYNC_DEBOUNCE_MS = 1000;
 
 /** 同步配置 */
 export interface SyncConfig {
@@ -36,41 +57,127 @@ function setSyncConfig(cfg: SyncConfig) {
   localStorage.setItem(STORAGE_KEYS.SYNC_CONFIG, JSON.stringify(cfg));
 }
 
-/** 读取外部同步文件 */
-async function readExternalFile(): Promise<Record<string, any> | null> {
-  const cfg = getSyncConfig();
-  if (!cfg.enabled) return null;
+function normalizeForCompare(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(normalizeForCompare);
+  }
+  if (value && typeof value === "object") {
+    const source = value as Record<string, unknown>;
+    return Object.keys(source)
+      .filter((key) => key !== "updatedAt")
+      .sort()
+      .reduce<Record<string, unknown>>((acc, key) => {
+        acc[key] = normalizeForCompare(source[key]);
+        return acc;
+      }, {});
+  }
+  return value;
+}
+
+function payloadSignature(payload: SyncPayload): string {
+  return JSON.stringify(normalizeForCompare(payload));
+}
+
+function hasPayloadChanged(current: SyncPayload, next: SyncPayload): boolean {
+  return payloadSignature(current) !== payloadSignature(next);
+}
+
+function isOlderThanBackupInterval(updatedAt: string | undefined, now: Date) {
+  if (!updatedAt) return false;
+  const updatedAtMs = Date.parse(updatedAt);
+  return (
+    Number.isFinite(updatedAtMs) &&
+    now.getTime() - updatedAtMs > BACKUP_INTERVAL_MS
+  );
+}
+
+function formatBackupTimestamp(date: Date): string {
+  const pad = (value: number) => value.toString().padStart(2, "0");
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+  ].join("-") + `-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+}
+
+function getBackupPath(path: string, date: Date): string {
+  const slashIndex = path.lastIndexOf("/");
+  const dir = slashIndex >= 0 ? path.slice(0, slashIndex) : "";
+  const fileName = slashIndex >= 0 ? path.slice(slashIndex + 1) : path;
+  const dotIndex = fileName.lastIndexOf(".");
+  const baseName = dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
+  const ext = dotIndex > 0 ? fileName.slice(dotIndex) : ".json";
+  const historyDir = dir ? `${dir}/history` : "history";
+  return `${historyDir}/${baseName}-${formatBackupTimestamp(date)}${ext}`;
+}
+
+async function readExternalFileSnapshot(
+  cfg: SyncConfig,
+): Promise<ExternalFileSnapshot | null> {
   try {
     const { data } = await Filesystem.readFile({
       path: cfg.path,
       directory: Directory.Documents,
       encoding: Encoding.UTF8,
     });
-    return JSON.parse(data as string);
+    const raw = data as string;
+    return { raw, payload: JSON.parse(raw) as SyncPayload };
   } catch {
     return null;
   }
 }
 
+/** 读取外部同步文件 */
+async function readExternalFile(): Promise<SyncPayload | null> {
+  const cfg = getSyncConfig();
+  if (!cfg.enabled) return null;
+  const snapshot = await readExternalFileSnapshot(cfg);
+  return snapshot?.payload ?? null;
+}
+
+async function backupExternalFile(
+  cfg: SyncConfig,
+  snapshot: ExternalFileSnapshot,
+  now: Date,
+): Promise<void> {
+  await Filesystem.writeFile({
+    path: getBackupPath(cfg.path, now),
+    data: snapshot.raw,
+    directory: Directory.Documents,
+    encoding: Encoding.UTF8,
+    recursive: true,
+  });
+}
+
 /** 写入外部同步文件 */
-async function writeExternalFile(payload: Record<string, any>): Promise<void> {
+async function writeExternalFile(payload: SyncPayload): Promise<void> {
   const cfg = getSyncConfig();
   if (!cfg.enabled) return;
-  try {
-    await Filesystem.writeFile({
-      path: cfg.path,
-      data: JSON.stringify(payload, null, 2),
-      directory: Directory.Documents,
-      encoding: Encoding.UTF8,
-      recursive: true,
-    });
-  } catch {
-    /* ignore */
+
+  const now = new Date();
+  const snapshot = await readExternalFileSnapshot(cfg);
+
+  if (snapshot) {
+    if (!hasPayloadChanged(snapshot.payload, payload)) {
+      return;
+    }
+
+    if (isOlderThanBackupInterval(snapshot.payload.updatedAt, now)) {
+      await backupExternalFile(cfg, snapshot, now);
+    }
   }
+
+  await Filesystem.writeFile({
+    path: cfg.path,
+    data: JSON.stringify(payload, null, 2),
+    directory: Directory.Documents,
+    encoding: Encoding.UTF8,
+    recursive: true,
+  });
 }
 
 /** 构建统一数据对象 */
-function buildPayload(): Record<string, any> {
+function buildPayload(): SyncPayload {
   return {
     expenses: storage.getExpenses(),
     categories: storage.getCategories(),
@@ -82,7 +189,7 @@ function buildPayload(): Record<string, any> {
 }
 
 /** 将统一数据对象加载到缓存 */
-function loadPayload(payload: Record<string, any>) {
+function loadPayload(payload: SyncPayload) {
   if (payload.expenses) cache[STORAGE_KEYS.EXPENSES] = payload.expenses;
   if (payload.categories) cache[STORAGE_KEYS.CATEGORIES] = payload.categories;
   if (payload.budgets) cache[STORAGE_KEYS.BUDGETS] = payload.budgets;
@@ -154,13 +261,22 @@ async function syncToInternal() {
 
 function getItem<T>(key: string, defaultValue: T): T {
   if (typeof window === "undefined") return defaultValue;
-  if (key in cache) return cache[key];
+  if (key in cache) return cache[key] as T;
   try {
     const item = localStorage.getItem(key);
     return item ? JSON.parse(item) : defaultValue;
   } catch {
     return defaultValue;
   }
+}
+
+function reportExternalSyncError(error: unknown) {
+  console.error("外部同步备份或写入失败", error);
+  window.dispatchEvent(
+    new CustomEvent(EXTERNAL_SYNC_ERROR_EVENT, {
+      detail: { message: "外部同步备份或写入失败，请检查存储权限" },
+    }),
+  );
 }
 
 function setItem<T>(key: string, value: T): void {
@@ -179,27 +295,27 @@ function setItem<T>(key: string, value: T): void {
   // 外部同步（若启用）
   const cfg = getSyncConfig();
   if (cfg.enabled) {
-    writeExternalFile(buildPayload()).catch(() => {});
+    writeExternalFile(buildPayload()).catch(reportExternalSyncError);
   }
 }
 
 export const storage = {
   getExpenses: () => {
-    const items = getItem(STORAGE_KEYS.EXPENSES, [] as any[]);
-    const migrated = items.map((e: any) => ({
+    const items = getItem<Expense[]>(STORAGE_KEYS.EXPENSES, []);
+    const migrated = items.map((e) => ({
       ...e,
       type: e.type || "expense",
       paymentMethod: e.paymentMethod || "other",
     }));
     return migrated;
   },
-  setExpenses: (v: any[]) => setItem(STORAGE_KEYS.EXPENSES, v),
-  getCategories: () => getItem(STORAGE_KEYS.CATEGORIES, [] as any[]),
-  setCategories: (v: any[]) => setItem(STORAGE_KEYS.CATEGORIES, v),
-  getBudgets: () => getItem(STORAGE_KEYS.BUDGETS, [] as any[]),
-  setBudgets: (v: any[]) => setItem(STORAGE_KEYS.BUDGETS, v),
-  getSettings: () => getItem<Record<string, any>>(STORAGE_KEYS.SETTINGS, {}),
-  setSettings: (v: any) => setItem(STORAGE_KEYS.SETTINGS, v),
+  setExpenses: (v: Expense[]) => setItem(STORAGE_KEYS.EXPENSES, v),
+  getCategories: () => getItem<Category[]>(STORAGE_KEYS.CATEGORIES, []),
+  setCategories: (v: Category[]) => setItem(STORAGE_KEYS.CATEGORIES, v),
+  getBudgets: () => getItem<MonthlyBudget[]>(STORAGE_KEYS.BUDGETS, []),
+  setBudgets: (v: MonthlyBudget[]) => setItem(STORAGE_KEYS.BUDGETS, v),
+  getSettings: () => getItem<AppSettings>(STORAGE_KEYS.SETTINGS, {}),
+  setSettings: (v: AppSettings) => setItem(STORAGE_KEYS.SETTINGS, v),
 };
 
 /** 外部同步相关 API */
@@ -222,7 +338,10 @@ export const syncApi = {
           message: "已开启外部同步，数据已写入 Documents/MoBill/data.json",
         };
       } catch {
-        return { success: false, message: "开启失败，请检查存储权限" };
+        return {
+          success: false,
+          message: "开启失败，请检查存储权限或备份文件写入权限",
+        };
       }
     }
     return { success: true, message: "已关闭外部同步" };

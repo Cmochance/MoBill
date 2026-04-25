@@ -7,6 +7,7 @@ import {
   MonthlySummary,
 } from "./types";
 import { storage } from "./storage";
+import { getRecordCategoryName, sortRecordsByTimeDesc } from "./records";
 import {
   format,
   startOfWeek,
@@ -15,7 +16,6 @@ import {
   endOfMonth,
   eachDayOfInterval,
   parseISO,
-  isSameMonth,
   subDays,
 } from "date-fns";
 
@@ -183,8 +183,9 @@ export function getMonthlyBudget(yearMonth: string): number {
 // ---------- Summaries ----------
 
 export function getDailySummary(date: string): DailySummary {
-  const expenses = getExpenses().filter((e) => e.expenseDate === date);
-  const cats = getCategories();
+  const expenses = getExpenses().filter(
+    (e) => e.type === "expense" && e.expenseDate === date,
+  );
   const map = new Map<string, number>();
   expenses.forEach((e) => {
     map.set(e.categoryId, (map.get(e.categoryId) || 0) + e.amount);
@@ -206,7 +207,7 @@ export function getWeeklySummary(date: string): WeeklySummary {
   const days = eachDayOfInterval({ start: ws, end: we });
   const expenses = getExpenses().filter((e) => {
     const ed = parseISO(e.expenseDate);
-    return ed >= ws && ed <= we;
+    return e.type === "expense" && ed >= ws && ed <= we;
   });
   const dailyTotals = days.map((day) => {
     const ds = format(day, "yyyy-MM-dd");
@@ -236,7 +237,7 @@ export function getMonthlySummary(yearMonth: string): MonthlySummary {
   const end = endOfMonth(new Date(year, month - 1));
   const expenses = getExpenses().filter((e) => {
     const ed = parseISO(e.expenseDate);
-    return ed >= start && ed <= end;
+    return e.type === "expense" && ed >= start && ed <= end;
   });
   const catMap = new Map<string, number>();
   expenses.forEach((e) => {
@@ -271,11 +272,13 @@ export function getMonthlyIncome(yearMonth: string): number {
 }
 
 export function getRecentExpenses(limit: number = 10): Expense[] {
-  return getExpenses().slice(0, limit);
+  return sortRecordsByTimeDesc(getExpenses()).slice(0, limit);
 }
 
 export function getExpensesByDate(date: string): Expense[] {
-  return getExpenses().filter((e) => e.expenseDate === date);
+  return sortRecordsByTimeDesc(
+    getExpenses().filter((e) => e.expenseDate === date),
+  );
 }
 
 export function searchExpenses(query: string): Expense[] {
@@ -291,16 +294,24 @@ export function searchExpenses(query: string): Expense[] {
 }
 
 export function exportToCSV(): string {
-  const expenses = getExpenses();
+  const expenses = sortRecordsByTimeDesc(getExpenses());
   const cats = getCategories();
-  const headers = ["日期", "时间", "分类", "金额", "备注"];
+  const methodLabels: Record<string, string> = {
+    wechat: "微信",
+    alipay: "支付宝",
+    bankcard: "银行卡",
+    other: "其他",
+  };
+  const headers = ["日期", "时间", "类型", "分类", "金额", "方式", "备注"];
   const rows = expenses.map((e) => {
-    const cat = cats.find((c) => c.id === e.categoryId)?.name || e.categoryId;
+    const method = e.type === "income" ? e.incomeMethod : e.paymentMethod;
     return [
       e.expenseDate,
       e.expenseTime,
-      cat,
+      e.type === "income" ? "收入" : "支出",
+      getRecordCategoryName(e, cats),
       e.amount.toFixed(2),
+      method ? methodLabels[method] || method : "",
       e.description,
     ];
   });

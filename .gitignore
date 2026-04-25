@@ -16,6 +16,7 @@
 # next.js
 /.next/
 /out/
+/dist/
 
 # production
 /build
@@ -23,6 +24,12 @@
 # misc
 .DS_Store
 *.pem
+*.keystore
+*.jks
+
+# packaged artifacts
+*.apk
+*.aab
 
 # debug
 npm-debug.log*
@@ -39,5 +46,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local toolchains
 tools/
-android/
+
+# Android generated/local files
+android/.gradle/
+android/**/build/
+android/local.properties
+android/app/keystore.properties
+android/app/google-services.json

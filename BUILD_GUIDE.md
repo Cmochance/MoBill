@@ -1,6 +1,6 @@
 # 构建与部署指南
 
-本文档记录如何将本网站项目打包为 Android APK，以及签名配置的详细信息。
+本文档记录如何将本网站项目打包为 Android APK，以及签名配置的本地准备方式。仓库只保存源码、构建脚本和示例配置，不保存本机工具链、签名密钥或 APK 产物。
 
 ---
 
@@ -16,15 +16,15 @@
 
 ---
 
-## 已安装环境（项目本地）
+## 构建环境
 
-所有构建工具已安装在项目目录 `tools/` 下，无需额外安装 Android Studio 或全局 JDK：
+构建脚本默认读取项目目录下的 `tools/` 工具链。`tools/` 是本机目录，不进入 Git 仓库；新机器可以选择按脚本约定准备该目录，也可以改用本机已安装的 JDK 和 Android SDK。
 
 | 工具 | 路径 | 版本 |
 |------|------|------|
-| JDK | `tools/jdk21.0.11_10/` | 21 LTS (Amazon Corretto) |
-| Android SDK | `tools/android-sdk/` | API 36 + Build-Tools 36.0.0 |
-| Gradle | 已缓存到用户目录 | 8.14 |
+| JDK | `tools/jdk21.0.11_10/` 或本机 JDK | 21 LTS |
+| Android SDK | `tools/android-sdk/` 或本机 Android SDK | API 36 + Build-Tools 36.0.0 |
+| Gradle | Android 工程 Gradle Wrapper 或用户目录缓存 | 8.x |
 
 ---
 
@@ -61,22 +61,38 @@ gradlew.bat assembleDebug
 
 ---
 
-## Release APK 打包（自动签名）
+## Release APK 打包（本地签名）
 
-Release 版本为正式发布版本，已配置自动签名。
+Release 版本为正式发布版本，需要在本机准备签名密钥和本地签名配置。真实密钥、口令和 `keystore.properties` 不进入 Git 仓库。
 
-### 签名配置详情
+### 本地签名文件
 
-| 配置项 | 值 |
-|--------|-----|
-| 密钥库文件 | `android/release.keystore` |
-| 密钥别名 (Key Alias) | `mochanbilling` |
-| 密钥密码 (Key Password) | `MochanBilling2026` |
-| 密钥库密码 (Store Password) | `MochanBilling2026` |
-| 有效期 | 10,000 天 |
-| 证书信息 | CN=Mochan Billing, OU=Dev, O=Mochan |
+需要在本机准备以下文件：
+
+| 文件 | 是否入库 | 说明 |
+|------|----------|------|
+| `android/release.keystore` | 否 | Android 应用签名密钥，只保存在安全位置 |
+| `android/app/keystore.properties` | 否 | 本机签名配置，保存密钥路径、别名和口令 |
+| `android/app/keystore.properties.example` | 是 | 示例模板，不包含真实口令 |
 
 签名配置位于 `android/app/build.gradle` 的 `signingConfigs.release` 块中，通过读取 `android/app/keystore.properties` 文件自动加载密钥信息。
+
+示例配置：
+
+```properties
+storeFile=../release.keystore
+storePassword=CHANGE_ME
+keyAlias=CHANGE_ME
+keyPassword=CHANGE_ME
+```
+
+首次配置时，可以复制示例文件：
+
+```bash
+cp android/app/keystore.properties.example android/app/keystore.properties
+```
+
+然后在本机编辑 `android/app/keystore.properties`，填入真实值。不要把真实签名配置提交到仓库。
 
 ### 构建命令
 
@@ -120,7 +136,7 @@ set ANDROID_HOME=%CD%\tools\android-sdk
 
 ---
 
-## ⚠️ 重要安全提醒
+## 重要安全提醒
 
 `android/release.keystore` 是应用的**唯一签名凭证**。
 

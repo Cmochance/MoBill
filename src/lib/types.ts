@@ -1,3 +1,5 @@
+export type MoneyMethod = "wechat" | "alipay" | "bankcard" | "other";
+
 export interface Expense {
   id: string;
   amount: number;
@@ -7,7 +9,8 @@ export interface Expense {
   expenseTime: string; // HH:mm
   createdAt: string;
   type: "expense" | "income";
-  paymentMethod?: "wechat" | "alipay" | "bankcard" | "other";
+  paymentMethod?: MoneyMethod;
+  incomeMethod?: MoneyMethod;
 }
 
 export interface Category {

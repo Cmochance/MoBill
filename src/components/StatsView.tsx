@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Category } from "@/lib/types";
 import {
   getWeeklySummary,
@@ -16,50 +16,34 @@ import {
   endOfMonth,
   eachDayOfInterval,
   subDays,
-  startOfWeek,
-  endOfWeek,
-  addWeeks,
 } from "date-fns";
 import {
-  BarChart,
-  Bar,
   XAxis,
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
   CartesianGrid,
   Area,
   AreaChart,
 } from "recharts";
+import { ChevronDown, CalendarDays } from "lucide-react";
 import {
-  ChevronDown,
-  TrendingUp,
-  TrendingDown,
-  CalendarDays,
-  ChevronRight,
-} from "lucide-react";
+  CategoryRankingCard,
+  InsightCard,
+  SummaryCard,
+} from "./stats/StatsCards";
 
 type Period = "week" | "month" | "year";
 
 export default function StatsView() {
   const [period, setPeriod] = useState<Period>("month");
-  const [today, setToday] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [refresh, setRefresh] = useState(0);
+  const today = format(new Date(), "yyyy-MM-dd");
+  const [categories] = useState<Category[]>(() => getCategories());
 
-  useEffect(() => {
-    setCategories(getCategories());
-  }, [refresh]);
-
-  const weekly = useMemo(() => getWeeklySummary(today), [today, refresh]);
+  const weekly = useMemo(() => getWeeklySummary(today), [today]);
   const monthly = useMemo(
     () => getMonthlySummary(format(parseISO(today), "yyyy-MM")),
-    [today, refresh],
+    [today],
   );
 
   const weekBarData = weekly.dailyTotals.map((d) => ({
@@ -80,7 +64,7 @@ export default function StatsView() {
         .reduce((s, e) => s + e.amount, 0);
       return { name: format(day, "d"), amount: total };
     });
-  }, [today, refresh]);
+  }, [today]);
 
   const pieData = monthly.categoryBreakdown
     .map((cb) => {
@@ -93,35 +77,6 @@ export default function StatsView() {
     })
     .filter((d) => d.value > 0);
   const totalPie = pieData.reduce((s, d) => s + d.value, 0);
-
-  // 月度收支对比数据（真实数据）
-  const compareData = useMemo(() => {
-    const expenses = getExpenses();
-    const months: { name: string; income: number; expense: number }[] = [];
-    for (let i = 4; i >= 0; i--) {
-      const m = subMonths(new Date(), i);
-      const ym = format(m, "yyyy-MM");
-      const [y, mo] = ym.split("-").map(Number);
-      const s = startOfMonth(new Date(y, mo - 1));
-      const e = endOfMonth(new Date(y, mo - 1));
-      const monthExpenses = expenses.filter((ex) => {
-        const ed = parseISO(ex.expenseDate);
-        return ed >= s && ed <= e && ex.type === "expense";
-      });
-      const monthIncome = expenses.filter((ex) => {
-        const ed = parseISO(ex.expenseDate);
-        return ed >= s && ed <= e && ex.type === "income";
-      });
-      const expTotal = monthExpenses.reduce((sum, ex) => sum + ex.amount, 0);
-      const incTotal = monthIncome.reduce((sum, ex) => sum + ex.amount, 0);
-      months.push({
-        name: format(m, "M月"),
-        income: Math.round(incTotal),
-        expense: Math.round(expTotal),
-      });
-    }
-    return months;
-  }, [refresh]);
 
   const yearData = useMemo(() => {
     const expenses = getExpenses().filter((e) => e.type === "expense");
@@ -141,44 +96,7 @@ export default function StatsView() {
       months.push({ name: format(m, "M月"), amount: total });
     }
     return months;
-  }, [refresh]);
-
-  const yearWeeklyData = useMemo(() => {
-    const year = parseISO(today).getFullYear();
-    const start = new Date(year, 0, 1);
-    const expenses = getExpenses().filter((e) => e.type === "expense");
-
-    let current = startOfWeek(start, { weekStartsOn: 1 });
-    const weeks: { name: string; label: string; amount: number }[] = [];
-    let lastMonth = -1;
-
-    while (current.getFullYear() <= year) {
-      if (current.getFullYear() > year && weeks.length > 0) break;
-
-      const ws = format(current, "yyyy-MM-dd");
-      const we = format(endOfWeek(current, { weekStartsOn: 1 }), "yyyy-MM-dd");
-      const total = expenses
-        .filter((ex) => {
-          const ed = parseISO(ex.expenseDate);
-          return ed >= parseISO(ws) && ed <= parseISO(we);
-        })
-        .reduce((sum, ex) => sum + ex.amount, 0);
-
-      const month = current.getMonth();
-      const isFirst = month !== lastMonth;
-      lastMonth = month;
-
-      weeks.push({
-        name: ws,
-        label: isFirst ? `${month + 1}月` : "",
-        amount: total,
-      });
-
-      current = addWeeks(current, 1);
-    }
-
-    return weeks;
-  }, [today, refresh]);
+  }, []);
 
   const yearDailyData = useMemo(() => {
     const year = parseISO(today).getFullYear();
@@ -197,15 +115,7 @@ export default function StatsView() {
         label: day.getDate() === 1 ? `${day.getMonth() + 1}月` : "",
       };
     });
-  }, [today, refresh]);
-
-  const yearIncomeTotal = useMemo(() => {
-    const expenses = getExpenses().filter((e) => {
-      const ed = parseISO(e.expenseDate);
-      return e.type === "income" && ed >= subMonths(new Date(), 11);
-    });
-    return expenses.reduce((sum, ex) => sum + ex.amount, 0);
-  }, [refresh]);
+  }, [today]);
 
   const yearPieData = useMemo(() => {
     const expenses = getExpenses().filter((e) => {
@@ -228,49 +138,9 @@ export default function StatsView() {
       .filter((d) => d.value > 0)
       .sort((a, b) => b.value - a.value);
     return result;
-  }, [categories, refresh]);
+  }, [categories]);
 
   const yearTotalPie = yearPieData.reduce((s, d) => s + d.value, 0);
-
-  const yearCompareData = useMemo(() => {
-    const expenses = getExpenses();
-    const months: { name: string; income: number; expense: number }[] = [];
-    for (let i = 11; i >= 0; i--) {
-      const m = subMonths(new Date(), i);
-      const ym = format(m, "yyyy-MM");
-      const [y, mo] = ym.split("-").map(Number);
-      const s = startOfMonth(new Date(y, mo - 1));
-      const e = endOfMonth(new Date(y, mo - 1));
-      const monthExpenses = expenses.filter((ex) => {
-        const ed = parseISO(ex.expenseDate);
-        return ed >= s && ed <= e && ex.type === "expense";
-      });
-      const monthIncome = expenses.filter((ex) => {
-        const ed = parseISO(ex.expenseDate);
-        return ed >= s && ed <= e && ex.type === "income";
-      });
-      const expTotal = monthExpenses.reduce((sum, ex) => sum + ex.amount, 0);
-      const incTotal = monthIncome.reduce((sum, ex) => sum + ex.amount, 0);
-      months.push({
-        name: format(m, "M月"),
-        income: Math.round(incTotal),
-        expense: Math.round(expTotal),
-      });
-    }
-    return months;
-  }, [refresh]);
-
-  const weekIncomeTotal = useMemo(() => {
-    const expenses = getExpenses();
-    const start = parseISO(weekly.weekStart);
-    const end = parseISO(weekly.weekEnd);
-    return expenses
-      .filter((ex) => {
-        const ed = parseISO(ex.expenseDate);
-        return ed >= start && ed <= end && ex.type === "income";
-      })
-      .reduce((sum, ex) => sum + ex.amount, 0);
-  }, [weekly, refresh]);
 
   const weekPieData = useMemo(() => {
     return weekly.categoryBreakdown
@@ -290,14 +160,14 @@ export default function StatsView() {
 
   const prevWeekly = useMemo(
     () => getWeeklySummary(format(subDays(parseISO(today), 7), "yyyy-MM-dd")),
-    [today, refresh],
+    [today],
   );
   const weekDiff = weekly.total - prevWeekly.total;
 
   const prevMonthly = useMemo(() => {
     const prevMonth = subMonths(parseISO(today), 1);
     return getMonthlySummary(format(prevMonth, "yyyy-MM"));
-  }, [today, refresh]);
+  }, [today]);
   const monthDiff = monthly.total - prevMonthly.total;
 
   const currentYearTotal = yearData.reduce((s, d) => s + d.amount, 0);
@@ -311,7 +181,7 @@ export default function StatsView() {
         return ed >= subMonths(now, 23) && ed < subMonths(now, 11);
       })
       .reduce((sum, ex) => sum + ex.amount, 0);
-  }, [refresh]);
+  }, []);
   const yearDiff = currentYearTotal - prevYearTotal;
 
   const monthBudgetAmount =
@@ -361,11 +231,13 @@ export default function StatsView() {
       {/* Month Selector + Period Toggle */}
       <div className="flex items-center justify-between">
         <button
-          className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm"
+          disabled
+          className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm cursor-not-allowed opacity-60"
           style={{
             backgroundColor: "rgba(245, 240, 232, 0.8)",
             border: "1px solid #E8E4DA",
           }}
+          aria-label="月份选择暂未开放"
         >
           <CalendarDays size={14} className="text-[#8C8678]" />
           <span className="text-[#3D3D3D]">
@@ -396,72 +268,12 @@ export default function StatsView() {
         </div>
       </div>
 
-      {/* Summary Card */}
-      <div
-        className="rounded-xl p-5 shadow-sm"
-        style={{
-          backgroundImage: "url(/card-2.png)",
-          backgroundSize: "100% 100%",
-          backgroundRepeat: "no-repeat",
-        }}
-      >
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm" style={{ color: "#8C8678" }}>
-              {summaryTitle}
-            </div>
-            <div
-              className="text-3xl font-bold mt-1"
-              style={{ color: "#3D3D3D" }}
-            >
-              ¥{summaryTotal.toFixed(2)}
-            </div>
-          </div>
-          <div
-            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium"
-            style={{
-              backgroundColor: summaryDiff >= 0 ? "#C45C4A12" : "#5A8F7B12",
-              color: summaryDiff >= 0 ? "#C45C4A" : "#5A8F7B",
-            }}
-          >
-            {summaryDiff >= 0 ? (
-              <TrendingUp size={16} />
-            ) : (
-              <TrendingDown size={16} />
-            )}
-            {summaryDiff >= 0 ? "+" : ""}
-            {summaryDiff.toFixed(0)}
-          </div>
-        </div>
-        {summaryBudgetProgress !== undefined && summaryBudgetProgress > 0 && (
-          <div className="mt-3">
-            <div
-              className="flex justify-between text-xs mb-1"
-              style={{ color: "#8C8678" }}
-            >
-              <span>预算进度</span>
-              <span>{(summaryBudgetProgress * 100).toFixed(0)}%</span>
-            </div>
-            <div
-              className="h-1.5 rounded-full overflow-hidden"
-              style={{ backgroundColor: "#E8E4DA" }}
-            >
-              <div
-                className="h-full rounded-full transition-all"
-                style={{
-                  width: `${Math.min(summaryBudgetProgress * 100, 100)}%`,
-                  backgroundColor:
-                    summaryBudgetProgress > 1
-                      ? "#C45C4A"
-                      : summaryBudgetProgress > 0.8
-                        ? "#C4954A"
-                        : "#5A8F7B",
-                }}
-              />
-            </div>
-          </div>
-        )}
-      </div>
+      <SummaryCard
+        title={summaryTitle}
+        total={summaryTotal}
+        diff={summaryDiff}
+        budgetProgress={summaryBudgetProgress}
+      />
 
       {/* Charts */}
       {period === "week" && (
@@ -511,7 +323,7 @@ export default function StatsView() {
                   tick={{ fontSize: 12, fill: "#9A9894" }}
                 />
                 <Tooltip
-                  formatter={(value: any) => [
+                  formatter={(value: unknown) => [
                     `¥${Number(value).toFixed(2)}`,
                     "支出",
                   ]}
@@ -535,100 +347,28 @@ export default function StatsView() {
 
           {/* Weekly Category Ranking + Insight */}
           <div className="space-y-3">
-            <div
-              className="rounded-xl p-4 shadow-sm"
-              style={{
-                backgroundImage: "url(/card-2.png)",
-                backgroundSize: "100% 100%",
-                backgroundRepeat: "no-repeat",
-              }}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-1 h-4 rounded-full bg-[#5A8F7B]" />
-                <span
-                  className="text-sm font-medium"
-                  style={{ color: "#3D3D3D" }}
-                >
-                  支出分类排行
-                </span>
-              </div>
-              <div className="space-y-2">
-                {weekPieData.slice(0, 5).map((d, i) => (
-                  <div
-                    key={d.name}
-                    className="flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-2 h-2 rounded-full"
-                        style={{ backgroundColor: d.color }}
-                      />
-                      <span className="text-xs text-[#3D3D3D]">{d.name}</span>
-                    </div>
-                    <span className="text-xs text-[#8C8678]">
-                      {((d.value / (weekTotalPie || 1)) * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <button className="mt-3 text-xs text-[#5A8F7B] flex items-center gap-0.5">
-                查看全部分类 <ChevronRight size={12} />
-              </button>
-            </div>
-
-            <div
-              className="rounded-xl p-4 shadow-sm"
-              style={{
-                backgroundImage: "url(/card-2.png)",
-                backgroundSize: "100% 100%",
-                backgroundRepeat: "no-repeat",
-              }}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-1 h-4 rounded-full bg-[#C4954A]" />
-                <span
-                  className="text-sm font-medium"
-                  style={{ color: "#3D3D3D" }}
-                >
-                  本周洞察
-                </span>
-              </div>
-              {weekPieData[0] && (
-                <>
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 rounded-full overflow-hidden">
-                      <img
-                        src={
-                          categories.find((c) => c.name === weekPieData[0].name)
-                            ?.iconImg
-                        }
-                        alt={weekPieData[0].name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <span className="text-xs text-[#6B6658]">
-                      本周{weekPieData[0].name}支出最高
-                    </span>
-                  </div>
-                  <div className="space-y-1 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-[#8C8678]">
-                        本周{weekPieData[0].name}支出
-                      </span>
-                      <span className="text-[#3D3D3D] font-medium">
-                        ¥{weekPieData[0].value.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[#8C8678]">日均支出</span>
-                      <span className="text-[#3D3D3D] font-medium">
-                        ¥{(weekly.total / 7).toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            <CategoryRankingCard
+              title="支出分类排行"
+              data={weekPieData}
+              total={weekTotalPie}
+            />
+            <InsightCard
+              title="本周洞察"
+              categoryName={
+                weekPieData[0] ? `本周${weekPieData[0].name}支出最高` : undefined
+              }
+              categoryIcon={
+                categories.find((c) => c.name === weekPieData[0]?.name)?.iconImg
+              }
+              primaryLabel={
+                weekPieData[0]
+                  ? `本周${weekPieData[0].name}支出`
+                  : undefined
+              }
+              primaryValue={weekPieData[0]?.value}
+              secondaryLabel="日均支出"
+              secondaryValue={`¥${(weekly.total / 7).toFixed(2)}`}
+            />
           </div>
         </>
       )}
@@ -674,7 +414,7 @@ export default function StatsView() {
                   tick={{ fontSize: 11, fill: "#9A9894" }}
                 />
                 <Tooltip
-                  formatter={(value: any) => [
+                  formatter={(value: unknown) => [
                     `¥${Number(value).toFixed(2)}`,
                     "支出",
                   ]}
@@ -698,98 +438,26 @@ export default function StatsView() {
 
           {/* Category Ranking + Monthly Insight */}
           <div className="space-y-3">
-            <div
-              className="rounded-xl p-4 shadow-sm"
-              style={{
-                backgroundImage: "url(/card-2.png)",
-                backgroundSize: "100% 100%",
-                backgroundRepeat: "no-repeat",
-              }}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-1 h-4 rounded-full bg-[#5A8F7B]" />
-                <span
-                  className="text-sm font-medium"
-                  style={{ color: "#3D3D3D" }}
-                >
-                  支出分类排行
-                </span>
-              </div>
-              <div className="space-y-2">
-                {pieData.slice(0, 5).map((d, i) => (
-                  <div
-                    key={d.name}
-                    className="flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-2 h-2 rounded-full"
-                        style={{ backgroundColor: d.color }}
-                      />
-                      <span className="text-xs text-[#3D3D3D]">{d.name}</span>
-                    </div>
-                    <span className="text-xs text-[#8C8678]">
-                      {((d.value / (totalPie || 1)) * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <button className="mt-3 text-xs text-[#5A8F7B] flex items-center gap-0.5">
-                查看全部分类 <ChevronRight size={12} />
-              </button>
-            </div>
-
-            <div
-              className="rounded-xl p-4 shadow-sm"
-              style={{
-                backgroundImage: "url(/card-2.png)",
-                backgroundSize: "100% 100%",
-                backgroundRepeat: "no-repeat",
-              }}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-1 h-4 rounded-full bg-[#C4954A]" />
-                <span
-                  className="text-sm font-medium"
-                  style={{ color: "#3D3D3D" }}
-                >
-                  本月洞察
-                </span>
-              </div>
-              {pieData[0] && (
-                <>
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 rounded-full overflow-hidden">
-                      <img
-                        src={
-                          categories.find((c) => c.name === pieData[0].name)
-                            ?.iconImg
-                        }
-                        alt={pieData[0].name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <span className="text-xs text-[#6B6658]">
-                      本月{pieData[0].name}支出最高
-                    </span>
-                  </div>
-                  <div className="space-y-1 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-[#8C8678]">
-                        本月{pieData[0].name}支出
-                      </span>
-                      <span className="text-[#3D3D3D] font-medium">
-                        ¥{pieData[0].value.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[#8C8678]">较上月变化</span>
-                      <span className="text-[#5A8F7B]">↓ 8.0%</span>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            <CategoryRankingCard
+              title="支出分类排行"
+              data={pieData}
+              total={totalPie}
+            />
+            <InsightCard
+              title="本月洞察"
+              categoryName={
+                pieData[0] ? `本月${pieData[0].name}支出最高` : undefined
+              }
+              categoryIcon={
+                categories.find((c) => c.name === pieData[0]?.name)?.iconImg
+              }
+              primaryLabel={
+                pieData[0] ? `本月${pieData[0].name}支出` : undefined
+              }
+              primaryValue={pieData[0]?.value}
+              secondaryLabel="较上月变化"
+              secondaryValue="↓ 8.0%"
+            />
           </div>
         </>
       )}
@@ -853,9 +521,13 @@ export default function StatsView() {
                   tick={{ fontSize: 10, fill: "#9A9894" }}
                 />
                 <Tooltip
-                  formatter={(value: any, name: any, props: any) => {
+                  formatter={(
+                    value: unknown,
+                    _name: unknown,
+                    props: { payload?: { name?: string } },
+                  ) => {
                     const item = yearDailyData.find(
-                      (d) => d.name === props.payload.name,
+                      (d) => d.name === props.payload?.name,
                     );
                     const dateStr = item
                       ? format(parseISO(item.name), "M月d日")
@@ -882,103 +554,32 @@ export default function StatsView() {
 
           {/* Annual Category Ranking + Insight */}
           <div className="space-y-3">
-            <div
-              className="rounded-xl p-4 shadow-sm"
-              style={{
-                backgroundImage: "url(/card-2.png)",
-                backgroundSize: "100% 100%",
-                backgroundRepeat: "no-repeat",
-              }}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-1 h-4 rounded-full bg-[#5A8F7B]" />
-                <span
-                  className="text-sm font-medium"
-                  style={{ color: "#3D3D3D" }}
-                >
-                  支出分类排行
-                </span>
-              </div>
-              <div className="space-y-2">
-                {yearPieData.slice(0, 5).map((d, i) => (
-                  <div
-                    key={d.name}
-                    className="flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-2 h-2 rounded-full"
-                        style={{ backgroundColor: d.color }}
-                      />
-                      <span className="text-xs text-[#3D3D3D]">{d.name}</span>
-                    </div>
-                    <span className="text-xs text-[#8C8678]">
-                      {((d.value / (yearTotalPie || 1)) * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <button className="mt-3 text-xs text-[#5A8F7B] flex items-center gap-0.5">
-                查看全部分类 <ChevronRight size={12} />
-              </button>
-            </div>
-
-            <div
-              className="rounded-xl p-4 shadow-sm"
-              style={{
-                backgroundImage: "url(/card-2.png)",
-                backgroundSize: "100% 100%",
-                backgroundRepeat: "no-repeat",
-              }}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-1 h-4 rounded-full bg-[#C4954A]" />
-                <span
-                  className="text-sm font-medium"
-                  style={{ color: "#3D3D3D" }}
-                >
-                  年度洞察
-                </span>
-              </div>
-              {yearPieData[0] && (
-                <>
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 rounded-full overflow-hidden">
-                      <img
-                        src={
-                          categories.find((c) => c.name === yearPieData[0].name)
-                            ?.iconImg
-                        }
-                        alt={yearPieData[0].name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <span className="text-xs text-[#6B6658]">
-                      年度{yearPieData[0].name}支出最高
-                    </span>
-                  </div>
-                  <div className="space-y-1 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-[#8C8678]">
-                        年度{yearPieData[0].name}支出
-                      </span>
-                      <span className="text-[#3D3D3D] font-medium">
-                        ¥{yearPieData[0].value.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[#8C8678]">月均支出</span>
-                      <span className="text-[#3D3D3D] font-medium">
-                        ¥
-                        {(
-                          yearData.reduce((s, d) => s + d.amount, 0) / 12
-                        ).toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            <CategoryRankingCard
+              title="支出分类排行"
+              data={yearPieData}
+              total={yearTotalPie}
+            />
+            <InsightCard
+              title="年度洞察"
+              categoryName={
+                yearPieData[0]
+                  ? `年度${yearPieData[0].name}支出最高`
+                  : undefined
+              }
+              categoryIcon={
+                categories.find((c) => c.name === yearPieData[0]?.name)?.iconImg
+              }
+              primaryLabel={
+                yearPieData[0]
+                  ? `年度${yearPieData[0].name}支出`
+                  : undefined
+              }
+              primaryValue={yearPieData[0]?.value}
+              secondaryLabel="月均支出"
+              secondaryValue={`¥${(
+                yearData.reduce((s, d) => s + d.amount, 0) / 12
+              ).toFixed(2)}`}
+            />
           </div>
         </>
       )}

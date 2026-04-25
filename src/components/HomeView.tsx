@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { Expense, Category } from "@/lib/types";
+import { useState } from "react";
+import { Category } from "@/lib/types";
 import {
   getMonthlySummary,
   getMonthlyIncome,
@@ -10,6 +10,7 @@ import {
   getExpenses,
   deleteExpense,
 } from "@/lib/data";
+import { getRecordCategoryName } from "@/lib/records";
 import {
   format,
   parseISO,
@@ -17,6 +18,7 @@ import {
   endOfMonth,
   eachDayOfInterval,
   subMonths,
+  subDays,
 } from "date-fns";
 import {
   Search,
@@ -26,49 +28,23 @@ import {
   Trash2,
   TrendingUp,
 } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  CartesianGrid,
-} from "recharts";
+import { XAxis, Tooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid } from "recharts";
 
 export default function HomeView({ onAdd }: { onAdd: () => void }) {
-  const [today, setToday] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [refresh, setRefresh] = useState(0);
-  const [categories, setCategories] = useState<Category[]>([]);
-
-  useEffect(() => {
-    setCategories(getCategories());
-  }, [refresh]);
-
-  const monthSummary = useMemo(
-    () => getMonthlySummary(format(parseISO(today), "yyyy-MM")),
-    [today, refresh],
-  );
-  const recent = useMemo(() => getRecentExpenses(6), [refresh]);
+  const today = format(new Date(), "yyyy-MM-dd");
+  const yesterday = format(subDays(parseISO(today), 1), "yyyy-MM-dd");
+  const [, setRefresh] = useState(0);
+  const [categories] = useState<Category[]>(() => getCategories());
+  const monthSummary = getMonthlySummary(format(parseISO(today), "yyyy-MM"));
+  const recent = getRecentExpenses(6);
 
   // 真实收入、支出、结余计算
-  const income = useMemo(
-    () => getMonthlyIncome(format(parseISO(today), "yyyy-MM")),
-    [today, refresh],
-  );
+  const income = getMonthlyIncome(format(parseISO(today), "yyyy-MM"));
   const expenseTotal = monthSummary.total;
   const balance = income - expenseTotal;
   const prevMonthStr = format(subMonths(parseISO(today), 1), "yyyy-MM");
-  const prevIncome = useMemo(
-    () => getMonthlyIncome(prevMonthStr),
-    [prevMonthStr, refresh],
-  );
-  const prevExpense = useMemo(
-    () => getMonthlySummary(prevMonthStr),
-    [prevMonthStr, refresh],
-  );
+  const prevIncome = getMonthlyIncome(prevMonthStr);
+  const prevExpense = getMonthlySummary(prevMonthStr);
   const prevBalance = prevIncome - prevExpense.total;
   const balanceChange =
     prevBalance !== 0
@@ -85,7 +61,7 @@ export default function HomeView({ onAdd }: { onAdd: () => void }) {
   const getCat = (id: string) => categories.find((c) => c.id === id);
 
   // Line chart data - monthly trend
-  const lineData = useMemo(() => {
+  const lineData = (() => {
     const start = startOfMonth(parseISO(today));
     const end = endOfMonth(parseISO(today));
     const days = eachDayOfInterval({ start, end });
@@ -97,25 +73,22 @@ export default function HomeView({ onAdd }: { onAdd: () => void }) {
         .reduce((s, e) => s + e.amount, 0);
       return { name: format(day, "d"), amount: total };
     });
-  }, [today, refresh]);
+  })();
 
   // Pie chart data - category breakdown
-  const pieData = useMemo(() => {
-    return monthSummary.categoryBreakdown
-      .map((cb) => {
-        const cat = categories.find((c) => c.id === cb.categoryId);
-        return {
-          name: cat?.name || cb.categoryId,
-          value: cb.amount,
-          color: cat?.color || "#999",
-        };
-      })
-      .filter((d) => d.value > 0)
-      .sort((a, b) => b.value - a.value);
-  }, [monthSummary, categories]);
+  const pieData = monthSummary.categoryBreakdown
+    .map((cb) => {
+      const cat = categories.find((c) => c.id === cb.categoryId);
+      return {
+        name: cat?.name || cb.categoryId,
+        value: cb.amount,
+        color: cat?.color || "#999",
+      };
+    })
+    .filter((d) => d.value > 0)
+    .sort((a, b) => b.value - a.value);
 
   const totalPie = pieData.reduce((s, d) => s + d.value, 0);
-  const topCategory = pieData[0];
 
   const displayMonth = format(parseISO(today), "yyyy年M月");
 
@@ -130,23 +103,26 @@ export default function HomeView({ onAdd }: { onAdd: () => void }) {
           </div>
           <div className="flex items-center gap-3">
             <button
-              className="p-1.5 rounded-full"
+              disabled
+              className="p-1.5 rounded-full cursor-not-allowed opacity-45"
               style={{
                 backgroundColor: "rgba(255,255,255,0.5)",
                 backdropFilter: "blur(4px)",
               }}
+              aria-label="搜索暂未开放"
             >
               <Search size={18} className="text-[#5A8F7B]" />
             </button>
             <button
-              className="p-1.5 rounded-full relative"
+              disabled
+              className="p-1.5 rounded-full relative cursor-not-allowed opacity-45"
               style={{
                 backgroundColor: "rgba(255,255,255,0.5)",
                 backdropFilter: "blur(4px)",
               }}
+              aria-label="日历入口暂未开放"
             >
               <CalendarDays size={18} className="text-[#5A8F7B]" />
-              <span className="absolute top-1 right-1.5 w-1.5 h-1.5 rounded-full bg-[#C45C4A]" />
             </button>
           </div>
         </div>
@@ -252,7 +228,7 @@ export default function HomeView({ onAdd }: { onAdd: () => void }) {
                   interval={6}
                 />
                 <Tooltip
-                  formatter={(value: any) => [
+                  formatter={(value: unknown) => [
                     `¥${Number(value).toFixed(2)}`,
                     "支出",
                   ]}
@@ -317,7 +293,12 @@ export default function HomeView({ onAdd }: { onAdd: () => void }) {
         >
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-medium text-[#3D3D3D]">常用分类</span>
-            <button className="text-xs text-[#8C8678]">编辑</button>
+            <button
+              disabled
+              className="text-xs text-[#9D9688] cursor-not-allowed opacity-55"
+            >
+              编辑
+            </button>
           </div>
           <div className="grid grid-cols-8 gap-2">
             {categories.slice(0, 8).map((cat) => (
@@ -350,7 +331,10 @@ export default function HomeView({ onAdd }: { onAdd: () => void }) {
         >
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-medium text-[#3D3D3D]">最近记录</span>
-            <button className="text-xs text-[#8C8678] flex items-center gap-0.5">
+            <button
+              disabled
+              className="text-xs text-[#9D9688] flex items-center gap-0.5 cursor-not-allowed opacity-55"
+            >
               查看全部 <ChevronRight size={12} />
             </button>
           </div>
@@ -363,6 +347,7 @@ export default function HomeView({ onAdd }: { onAdd: () => void }) {
             {recent.map((exp) => {
               const cat = getCat(exp.categoryId);
               const isIncome = exp.type === "income";
+              const categoryName = getRecordCategoryName(exp, categories);
               const displayAmount = Math.abs(exp.amount);
               return (
                 <div key={exp.id} className="flex items-center justify-between">
@@ -376,17 +361,13 @@ export default function HomeView({ onAdd }: { onAdd: () => void }) {
                     </div>
                     <div>
                       <div className="text-sm font-medium text-[#3D3D3D]">
-                        {exp.description || cat?.name}
+                        {exp.description || categoryName}
                       </div>
                       <div className="text-[10px] text-[#B5AE9E]">
-                        {exp.description ? cat?.name + " " : ""}
-                        {exp.expenseDate === format(new Date(), "yyyy-MM-dd")
+                        {exp.description ? categoryName + " " : ""}
+                        {exp.expenseDate === today
                           ? "今天"
-                          : exp.expenseDate ===
-                              format(
-                                new Date(Date.now() - 86400000),
-                                "yyyy-MM-dd",
-                              )
+                          : exp.expenseDate === yesterday
                             ? "昨天"
                             : exp.expenseDate}{" "}
                         {exp.expenseTime}
