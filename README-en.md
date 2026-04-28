@@ -18,24 +18,36 @@ The current project is built as a **Next.js static app wrapped by Capacitor for 
 
 <table>
   <tr>
-    <td width="50%">
+    <td width="33%">
       <img src="public/readme-home.png" alt="Home overview, weekly trend, common categories, and today's ledger">
     </td>
-    <td width="50%">
+    <td width="33%">
+      <img src="public/readme-stats.png" alt="Statistics page with weekly analysis, expense trend, and category ranking">
+    </td>
+    <td width="33%">
       <img src="public/readme-add.png" alt="Add record page with categories, date, note, and payment method">
     </td>
   </tr>
   <tr>
-    <td align="center">Home overview, weekly trend, common categories, and today's ledger</td>
-    <td align="center">Add record, category selection, date, note, and payment method</td>
+    <td align="center">Home</td>
+    <td align="center">Statistics</td>
+    <td align="center">Add Record</td>
   </tr>
   <tr>
-    <td colspan="2">
+    <td width="33%">
+      <img src="public/readme-budget.png" alt="Budget page with monthly budget overview and budget settings">
+    </td>
+    <td width="33%">
       <img src="public/readme-profile.png" alt="Profile page with asset overview, backup, restore, category management, and themes">
+    </td>
+    <td width="33%">
+      <img src="public/readme-records.png" alt="Recent records panel with day, month, year filters and date selection">
     </td>
   </tr>
   <tr>
-    <td colspan="2" align="center">Asset overview, backup and restore, category management, themes, and about dialog</td>
+    <td align="center">Budget</td>
+    <td align="center">Profile</td>
+    <td align="center">Recent Records</td>
   </tr>
 </table>
 

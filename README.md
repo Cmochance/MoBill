@@ -18,24 +18,36 @@ English README: [README-en.md](README-en.md)
 
 <table>
   <tr>
-    <td width="50%">
+    <td width="33%">
       <img src="public/readme-home.png" alt="首页概览、周趋势、常用分类和今日账本">
     </td>
-    <td width="50%">
+    <td width="33%">
+      <img src="public/readme-stats.png" alt="统计页面、周分析、支出趋势和分类排行">
+    </td>
+    <td width="33%">
       <img src="public/readme-add.png" alt="记一笔页面、分类、日期、备注和支付方式">
     </td>
   </tr>
   <tr>
-    <td align="center">首页概览、周趋势、常用分类和今日账本</td>
-    <td align="center">记一笔、分类选择、日期、备注和支付方式</td>
+    <td align="center">首页</td>
+    <td align="center">统计</td>
+    <td align="center">记一笔</td>
   </tr>
   <tr>
-    <td colspan="2">
+    <td width="33%">
+      <img src="public/readme-budget.png" alt="预算页面、本月预算概览和预算设置">
+    </td>
+    <td width="33%">
       <img src="public/readme-profile.png" alt="我的页面、资产概览、备份恢复、分类管理和主题设置">
+    </td>
+    <td width="33%">
+      <img src="public/readme-records.png" alt="最近记录页面、日月年筛选和日期选择">
     </td>
   </tr>
   <tr>
-    <td colspan="2" align="center">资产概览、备份恢复、分类管理、主题设置和关于我们</td>
+    <td align="center">预算</td>
+    <td align="center">我的</td>
+    <td align="center">最近记录</td>
   </tr>
 </table>
 
