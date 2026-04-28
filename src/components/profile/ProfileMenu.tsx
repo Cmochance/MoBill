@@ -3,6 +3,7 @@
 import type { ComponentType } from "react";
 import type { LucideProps } from "lucide-react";
 import { ChevronRight, Trash2 } from "lucide-react";
+import { CardFrame } from "../CardFrame";
 
 export interface ProfileMenuItem {
   icon: ComponentType<LucideProps>;
@@ -18,14 +19,7 @@ interface ProfileMenuProps {
 
 export function ProfileMenu({ items, onReset }: ProfileMenuProps) {
   return (
-    <div
-      className="rounded-xl shadow-sm overflow-hidden"
-      style={{
-        backgroundImage: "url(/card-2.png)",
-        backgroundSize: "100% 100%",
-        backgroundRepeat: "no-repeat",
-      }}
-    >
+    <CardFrame className="rounded-xl shadow-sm">
       {items.map((item, index) => (
         <button
           key={item.label}
@@ -70,6 +64,6 @@ export function ProfileMenu({ items, onReset }: ProfileMenuProps) {
         </div>
         <ChevronRight size={16} className="text-[#D0C8B8]" />
       </button>
-    </div>
+    </CardFrame>
   );
 }

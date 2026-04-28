@@ -10,6 +10,7 @@ import {
 } from "@/lib/data";
 import { format, parseISO } from "date-fns";
 import { ChevronRight, AlertCircle } from "lucide-react";
+import { CardFrame } from "./CardFrame";
 
 export default function BudgetView() {
   const [today] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -56,14 +57,11 @@ export default function BudgetView() {
       </div>
 
       {/* Budget Overview Card */}
-      <div
-        className="relative rounded-xl p-4 pt-8 shadow-sm overflow-hidden"
-        style={{
-          backgroundImage: "url(/card-1.png)",
-          backgroundSize: "100% 100%",
-          backgroundRepeat: "no-repeat",
-          minHeight: "200px",
-        }}
+      <CardFrame
+        variant="card-1"
+        className="rounded-xl shadow-sm"
+        contentClassName="p-4 pt-8"
+        style={{ minHeight: "200px" }}
       >
         <div className="grid grid-cols-3 gap-2 text-center mt-2">
           <div>
@@ -115,7 +113,7 @@ export default function BudgetView() {
             {isOver ? "预算已超支，请注意控制" : "合理规划，轻松达成预算目标"}
           </p>
         </div>
-      </div>
+      </CardFrame>
 
       {/* Category Budgets */}
       <div className="space-y-3">
@@ -128,14 +126,10 @@ export default function BudgetView() {
             const catProgress = Math.min((cb.amount / catBudget) * 100, 100);
             const catOver = cb.amount > catBudget;
             return (
-              <div
+              <CardFrame
                 key={cb.categoryId}
-                className="rounded-xl p-4 shadow-sm flex items-center gap-3"
-                style={{
-                  backgroundImage: "url(/card-2.png)",
-                  backgroundSize: "100% 100%",
-                  backgroundRepeat: "no-repeat",
-                }}
+                className="rounded-xl shadow-sm"
+                contentClassName="flex items-center gap-3 p-4"
               >
                 <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0">
                   <img
@@ -183,19 +177,15 @@ export default function BudgetView() {
                   size={16}
                   className="text-[#D0C8B8] flex-shrink-0"
                 />
-              </div>
+              </CardFrame>
             );
           })}
       </div>
 
       {/* Budget Tip */}
-      <div
-        className="rounded-xl p-4 shadow-sm flex items-center gap-3"
-        style={{
-          backgroundImage: "url(/card-2.png)",
-          backgroundSize: "100% 100%",
-          backgroundRepeat: "no-repeat",
-        }}
+      <CardFrame
+        className="rounded-xl shadow-sm"
+        contentClassName="flex items-center gap-3 p-4"
       >
         <div className="w-10 h-10 rounded-full bg-[#5A8F7B18] flex items-center justify-center flex-shrink-0">
           <span className="text-lg">💡</span>
@@ -207,7 +197,7 @@ export default function BudgetView() {
           </div>
         </div>
         <ChevronRight size={16} className="text-[#D0C8B8]" />
-      </div>
+      </CardFrame>
 
       {/* Budget Input */}
       <div className="flex items-center gap-2">

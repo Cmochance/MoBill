@@ -1,26 +1,27 @@
 import { Preferences } from "@capacitor/preferences";
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 import { Category, Expense, MonthlyBudget } from "./types";
+import { APP_VERSION } from "./app-info";
 
 const STORAGE_KEYS = {
   EXPENSES: "mochan_expenses",
   CATEGORIES: "mochan_categories",
   BUDGETS: "mochan_budgets",
   SETTINGS: "mochan_settings",
-  SYNC_CONFIG: "mochan_sync_config",
 };
 
-const EXTERNAL_FILE = "MoBill/data.json";
-const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
-export const EXTERNAL_SYNC_ERROR_EVENT = "mobill:external-sync-error";
+const LOCAL_DATA_FILE = "MoBill/data.json";
+export const LOCAL_BACKUP_ERROR_EVENT = "mobill:local-backup-error";
 
 export interface AppSettings {
   nickname?: string;
   assetAccounts?: Array<{ name: string; amount: number }>;
+  themeId?: string;
+  recentDescriptions?: string[];
   [key: string]: unknown;
 }
 
-interface SyncPayload {
+export interface SyncPayload {
   expenses?: Expense[];
   categories?: Category[];
   budgets?: MonthlyBudget[];
@@ -29,33 +30,31 @@ interface SyncPayload {
   appVersion?: string;
 }
 
-interface ExternalFileSnapshot {
+interface LocalFileSnapshot {
   raw: string;
   payload: SyncPayload;
 }
 
+export interface LocalDataConflict {
+  appPayload: SyncPayload;
+  filePayload: SyncPayload;
+  fileRaw: string;
+}
+
+export type LocalDataConflictResolution = "import-file" | "keep-app";
+
+export interface StorageInitResult {
+  conflict: LocalDataConflict | null;
+}
+
+export interface StorageActionResult {
+  success: boolean;
+  message: string;
+  shouldReload?: boolean;
+}
+
 const cache: Record<string, unknown> = {};
 let initialized = false;
-
-/** 同步配置 */
-export interface SyncConfig {
-  enabled: boolean;
-  path: string;
-}
-
-function getSyncConfig(): SyncConfig {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.SYNC_CONFIG);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    /* ignore */
-  }
-  return { enabled: false, path: EXTERNAL_FILE };
-}
-
-function setSyncConfig(cfg: SyncConfig) {
-  localStorage.setItem(STORAGE_KEYS.SYNC_CONFIG, JSON.stringify(cfg));
-}
 
 function normalizeForCompare(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -64,7 +63,7 @@ function normalizeForCompare(value: unknown): unknown {
   if (value && typeof value === "object") {
     const source = value as Record<string, unknown>;
     return Object.keys(source)
-      .filter((key) => key !== "updatedAt")
+      .filter((key) => key !== "updatedAt" && key !== "appVersion")
       .sort()
       .reduce<Record<string, unknown>>((acc, key) => {
         acc[key] = normalizeForCompare(source[key]);
@@ -82,12 +81,14 @@ function hasPayloadChanged(current: SyncPayload, next: SyncPayload): boolean {
   return payloadSignature(current) !== payloadSignature(next);
 }
 
-function isOlderThanBackupInterval(updatedAt: string | undefined, now: Date) {
-  if (!updatedAt) return false;
-  const updatedAtMs = Date.parse(updatedAt);
-  return (
-    Number.isFinite(updatedAtMs) &&
-    now.getTime() - updatedAtMs > BACKUP_INTERVAL_MS
+function isSyncPayload(value: unknown): value is SyncPayload {
+  if (!value || typeof value !== "object") return false;
+  const data = value as SyncPayload;
+  return Boolean(
+    Array.isArray(data.expenses) ||
+      Array.isArray(data.categories) ||
+      Array.isArray(data.budgets) ||
+      (data.settings && typeof data.settings === "object"),
   );
 }
 
@@ -100,76 +101,61 @@ function formatBackupTimestamp(date: Date): string {
   ].join("-") + `-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 }
 
-function getBackupPath(path: string, date: Date): string {
-  const slashIndex = path.lastIndexOf("/");
-  const dir = slashIndex >= 0 ? path.slice(0, slashIndex) : "";
-  const fileName = slashIndex >= 0 ? path.slice(slashIndex + 1) : path;
-  const dotIndex = fileName.lastIndexOf(".");
-  const baseName = dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
-  const ext = dotIndex > 0 ? fileName.slice(dotIndex) : ".json";
-  const historyDir = dir ? `${dir}/history` : "history";
-  return `${historyDir}/${baseName}-${formatBackupTimestamp(date)}${ext}`;
+function getBackupPath(date: Date): string {
+  return `MoBill/backup-${formatBackupTimestamp(date)}.json`;
 }
 
-async function readExternalFileSnapshot(
-  cfg: SyncConfig,
-): Promise<ExternalFileSnapshot | null> {
+function withMetadata(payload: SyncPayload): SyncPayload {
+  return {
+    ...payload,
+    updatedAt: new Date().toISOString(),
+    appVersion: payload.appVersion || APP_VERSION,
+  };
+}
+
+async function readLocalFileSnapshot(): Promise<LocalFileSnapshot | null> {
   try {
     const { data } = await Filesystem.readFile({
-      path: cfg.path,
+      path: LOCAL_DATA_FILE,
       directory: Directory.Documents,
       encoding: Encoding.UTF8,
     });
     const raw = data as string;
-    return { raw, payload: JSON.parse(raw) as SyncPayload };
+    const parsed = JSON.parse(raw);
+    if (!isSyncPayload(parsed)) return null;
+    return { raw, payload: parsed };
   } catch {
     return null;
   }
 }
 
-/** 读取外部同步文件 */
-async function readExternalFile(): Promise<SyncPayload | null> {
-  const cfg = getSyncConfig();
-  if (!cfg.enabled) return null;
-  const snapshot = await readExternalFileSnapshot(cfg);
-  return snapshot?.payload ?? null;
-}
-
-async function backupExternalFile(
-  cfg: SyncConfig,
-  snapshot: ExternalFileSnapshot,
-  now: Date,
-): Promise<void> {
+async function writePayloadToLocalFile(payload: SyncPayload): Promise<void> {
   await Filesystem.writeFile({
-    path: getBackupPath(cfg.path, now),
-    data: snapshot.raw,
+    path: LOCAL_DATA_FILE,
+    data: JSON.stringify(withMetadata(payload), null, 2),
     directory: Directory.Documents,
     encoding: Encoding.UTF8,
     recursive: true,
   });
 }
 
-/** 写入外部同步文件 */
-async function writeExternalFile(payload: SyncPayload): Promise<void> {
-  const cfg = getSyncConfig();
-  if (!cfg.enabled) return;
-
-  const now = new Date();
-  const snapshot = await readExternalFileSnapshot(cfg);
-
-  if (snapshot) {
-    if (!hasPayloadChanged(snapshot.payload, payload)) {
-      return;
-    }
-
-    if (isOlderThanBackupInterval(snapshot.payload.updatedAt, now)) {
-      await backupExternalFile(cfg, snapshot, now);
-    }
-  }
-
+async function writeBackupFileFromRaw(raw: string, now = new Date()) {
   await Filesystem.writeFile({
-    path: cfg.path,
-    data: JSON.stringify(payload, null, 2),
+    path: getBackupPath(now),
+    data: raw,
+    directory: Directory.Documents,
+    encoding: Encoding.UTF8,
+    recursive: true,
+  });
+}
+
+async function writeBackupFileFromPayload(
+  payload: SyncPayload,
+  now = new Date(),
+) {
+  await Filesystem.writeFile({
+    path: getBackupPath(now),
+    data: JSON.stringify(withMetadata(payload), null, 2),
     directory: Directory.Documents,
     encoding: Encoding.UTF8,
     recursive: true,
@@ -184,7 +170,7 @@ function buildPayload(): SyncPayload {
     budgets: storage.getBudgets(),
     settings: storage.getSettings(),
     updatedAt: new Date().toISOString(),
-    appVersion: "1.0.0",
+    appVersion: APP_VERSION,
   };
 }
 
@@ -196,27 +182,8 @@ function loadPayload(payload: SyncPayload) {
   if (payload.settings) cache[STORAGE_KEYS.SETTINGS] = payload.settings;
 }
 
-/** 初始化存储 */
-export async function initStorage(): Promise<void> {
-  if (initialized || typeof window === "undefined") return;
-
-  const cfg = getSyncConfig();
-
-  // 1. 若启用了外部同步，优先从外部文件加载
-  if (cfg.enabled) {
-    const external = await readExternalFile();
-    if (external) {
-      loadPayload(external);
-      // 同时回写到 Preferences / localStorage
-      await syncToInternal();
-      initialized = true;
-      return;
-    }
-  }
-
-  // 2. 从 Preferences 加载
+async function loadInternalStorage() {
   for (const key of Object.values(STORAGE_KEYS)) {
-    if (key === STORAGE_KEYS.SYNC_CONFIG) continue;
     let loaded = false;
     try {
       const { value } = await Preferences.get({ key });
@@ -228,7 +195,7 @@ export async function initStorage(): Promise<void> {
       /* ignore */
     }
 
-    // 3. 回退到 localStorage（兼容旧版本）
+    // 兼容旧版本 localStorage 数据。
     if (!loaded) {
       try {
         const item = localStorage.getItem(key);
@@ -241,14 +208,37 @@ export async function initStorage(): Promise<void> {
       }
     }
   }
+}
 
-  initialized = true;
+async function detectLocalDataConflict(): Promise<LocalDataConflict | null> {
+  const snapshot = await readLocalFileSnapshot();
+  if (!snapshot) return null;
+
+  const appPayload = buildPayload();
+  if (!hasPayloadChanged(snapshot.payload, appPayload)) return null;
+
+  return {
+    appPayload,
+    filePayload: snapshot.payload,
+    fileRaw: snapshot.raw,
+  };
+}
+
+/** 初始化存储，并在本机备份文件与应用内数据不一致时返回冲突信息。 */
+export async function initStorage(): Promise<StorageInitResult> {
+  if (typeof window === "undefined") return { conflict: null };
+
+  if (!initialized) {
+    await loadInternalStorage();
+    initialized = true;
+  }
+
+  return { conflict: await detectLocalDataConflict() };
 }
 
 /** 将缓存数据同步到内部存储 */
 async function syncToInternal() {
   for (const [key, value] of Object.entries(cache)) {
-    if (key === STORAGE_KEYS.SYNC_CONFIG) continue;
     const serialized = JSON.stringify(value);
     await Preferences.set({ key, value: serialized }).catch(() => {});
     try {
@@ -270,11 +260,11 @@ function getItem<T>(key: string, defaultValue: T): T {
   }
 }
 
-function reportExternalSyncError(error: unknown) {
-  console.error("外部同步备份或写入失败", error);
+function reportLocalBackupError(error: unknown) {
+  console.error("本机备份写入失败", error);
   window.dispatchEvent(
-    new CustomEvent(EXTERNAL_SYNC_ERROR_EVENT, {
-      detail: { message: "外部同步备份或写入失败，请检查存储权限" },
+    new CustomEvent(LOCAL_BACKUP_ERROR_EVENT, {
+      detail: { message: "本机备份失败，请检查 Documents/MoBill 写入权限" },
     }),
   );
 }
@@ -284,7 +274,6 @@ function setItem<T>(key: string, value: T): void {
   cache[key] = value;
   const serialized = JSON.stringify(value);
 
-  // 内部双写
   Preferences.set({ key, value: serialized }).catch(() => {});
   try {
     localStorage.setItem(key, serialized);
@@ -292,11 +281,7 @@ function setItem<T>(key: string, value: T): void {
     /* ignore */
   }
 
-  // 外部同步（若启用）
-  const cfg = getSyncConfig();
-  if (cfg.enabled) {
-    writeExternalFile(buildPayload()).catch(reportExternalSyncError);
-  }
+  writePayloadToLocalFile(buildPayload()).catch(reportLocalBackupError);
 }
 
 export const storage = {
@@ -318,108 +303,110 @@ export const storage = {
   setSettings: (v: AppSettings) => setItem(STORAGE_KEYS.SETTINGS, v),
 };
 
-/** 外部同步相关 API */
-export const syncApi = {
-  getConfig: getSyncConfig,
-
-  /** 启用/禁用外部同步 */
-  async setEnabled(
-    enabled: boolean,
-  ): Promise<{ success: boolean; message: string }> {
-    const cfg = { ...getSyncConfig(), enabled };
-    setSyncConfig(cfg);
-
-    if (enabled) {
-      try {
-        // 首次启用：将当前数据写入外部文件
-        await writeExternalFile(buildPayload());
-        return {
-          success: true,
-          message: "已开启外部同步，数据已写入 Documents/MoBill/data.json",
-        };
-      } catch {
-        return {
-          success: false,
-          message: "开启失败，请检查存储权限或备份文件写入权限",
-        };
-      }
-    }
-    return { success: true, message: "已关闭外部同步" };
-  },
-
-  /** 手动触发从外部文件重新加载 */
-  async reloadFromExternal(): Promise<{ success: boolean; message: string }> {
-    const cfg = getSyncConfig();
-    if (!cfg.enabled) {
-      return { success: false, message: "外部同步未开启" };
-    }
-    const external = await readExternalFile();
-    if (!external) {
-      return { success: false, message: "未找到外部同步文件" };
-    }
-    loadPayload(external);
-    await syncToInternal();
-    return { success: true, message: "已从外部文件重新加载数据" };
-  },
-
-  /** 获取外部文件实际路径提示 */
-  getExternalPathHint(): string {
-    return "Documents/MoBill/data.json";
-  },
-};
-
-/** 导出全部数据为 JSON 字符串 */
-export function exportAllData(): string {
-  return JSON.stringify(buildPayload(), null, 2);
-}
-
-/** 从 JSON 字符串导入全部数据 */
-export function importAllData(json: string): {
-  success: boolean;
-  message: string;
-} {
+/** 手动备份：把应用内数据写入 Documents/MoBill/data.json。 */
+export async function backupDataToLocalFile(): Promise<StorageActionResult> {
   try {
-    const data = JSON.parse(json);
-    if (!data.expenses && !data.categories) {
-      return { success: false, message: "无效的备份文件格式" };
+    const appPayload = buildPayload();
+    const snapshot = await readLocalFileSnapshot();
+    if (snapshot && hasPayloadChanged(snapshot.payload, appPayload)) {
+      await writeBackupFileFromRaw(snapshot.raw);
     }
-    if (data.expenses) storage.setExpenses(data.expenses);
-    if (data.categories) storage.setCategories(data.categories);
-    if (data.budgets) storage.setBudgets(data.budgets);
-    if (data.settings) storage.setSettings(data.settings);
-    return { success: true, message: "数据恢复成功" };
+    await writePayloadToLocalFile(appPayload);
+    return {
+      success: true,
+      message: "已备份到 Documents/MoBill/data.json",
+    };
   } catch {
-    return { success: false, message: "文件解析失败，请检查备份文件" };
+    return {
+      success: false,
+      message: "备份失败，请检查 Documents/MoBill 写入权限",
+    };
   }
 }
 
-/** 彻底清空所有数据（localStorage + Preferences + 缓存 + 外部文件） */
+/** 手动恢复：用 Documents/MoBill/data.json 覆盖应用内数据。 */
+export async function restoreDataFromLocalFile(): Promise<StorageActionResult> {
+  try {
+    const snapshot = await readLocalFileSnapshot();
+    if (!snapshot) {
+      return {
+        success: false,
+        message: "未找到可恢复的 Documents/MoBill/data.json",
+      };
+    }
+
+    const appPayload = buildPayload();
+    if (!hasPayloadChanged(snapshot.payload, appPayload)) {
+      return { success: true, message: "当前数据已一致，无需恢复" };
+    }
+
+    await writeBackupFileFromPayload(appPayload);
+    loadPayload(snapshot.payload);
+    await syncToInternal();
+    return {
+      success: true,
+      message: "已从 Documents/MoBill/data.json 恢复数据",
+      shouldReload: true,
+    };
+  } catch {
+    return {
+      success: false,
+      message: "恢复失败，请检查 Documents/MoBill/data.json",
+    };
+  }
+}
+
+/** 处理启动时检测到的数据冲突。 */
+export async function resolveLocalDataConflict(
+  conflict: LocalDataConflict,
+  resolution: LocalDataConflictResolution,
+): Promise<StorageActionResult> {
+  try {
+    if (resolution === "import-file") {
+      await writeBackupFileFromPayload(buildPayload());
+      loadPayload(conflict.filePayload);
+      await syncToInternal();
+      return {
+        success: true,
+        message: "已导入 Documents/MoBill/data.json",
+        shouldReload: true,
+      };
+    }
+
+    await writeBackupFileFromRaw(conflict.fileRaw);
+    await writePayloadToLocalFile(buildPayload());
+    return {
+      success: true,
+      message: "已保留应用内数据，并更新 Documents/MoBill/data.json",
+    };
+  } catch {
+    return {
+      success: false,
+      message: "处理本地数据冲突失败，请检查 Documents/MoBill 写入权限",
+    };
+  }
+}
+
+/** 彻底清空所有数据（localStorage + Preferences + 缓存 + 本机数据文件） */
 export async function clearAllData(): Promise<void> {
-  // 1. 清空内存缓存
   for (const key of Object.keys(cache)) {
     delete cache[key];
   }
 
-  // 2. 清空 Preferences
   for (const key of Object.values(STORAGE_KEYS)) {
     await Preferences.remove({ key }).catch(() => {});
   }
 
-  // 3. 清空 localStorage
   if (typeof window !== "undefined") {
     localStorage.clear();
   }
 
-  // 4. 删除外部同步文件（若启用）
-  const cfg = getSyncConfig();
-  if (cfg.enabled) {
-    try {
-      await Filesystem.deleteFile({
-        path: cfg.path,
-        directory: Directory.Documents,
-      });
-    } catch {
-      /* 文件可能不存在，忽略 */
-    }
+  try {
+    await Filesystem.deleteFile({
+      path: LOCAL_DATA_FILE,
+      directory: Directory.Documents,
+    });
+  } catch {
+    /* 文件可能不存在，忽略 */
   }
 }

@@ -5,6 +5,7 @@ import {
   INCOME_CATEGORIES,
   IncomeCategory,
 } from "./options";
+import { CardFrame } from "../CardFrame";
 
 interface CategorySelectorProps {
   recordType: "expense" | "income";
@@ -34,14 +35,7 @@ export function CategorySelector({
   );
 
   return (
-    <div
-      className="rounded-xl p-4 shadow-sm"
-      style={{
-        backgroundImage: "url(/card-2.png)",
-        backgroundSize: "100% 100%",
-        backgroundRepeat: "no-repeat",
-      }}
-    >
+    <CardFrame className="rounded-xl shadow-sm" contentClassName="p-4">
       <div className="grid grid-cols-4 gap-3">
         {recordType === "expense"
           ? (pageCats as ExpenseCategory[]).map((cat) => (
@@ -113,6 +107,6 @@ export function CategorySelector({
           ))}
         </div>
       )}
-    </div>
+    </CardFrame>
   );
 }

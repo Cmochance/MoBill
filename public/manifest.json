@@ -1,6 +1,6 @@
 {
-  "name": "墨禅记账",
-  "short_name": "记账",
+  "name": "墨风记账",
+  "short_name": "墨风记账",
   "description": "按天记录支出，自动汇总统计",
   "start_url": "/",
   "display": "standalone",

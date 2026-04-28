@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronLeft, Wallet } from "lucide-react";
+import { CardFrame } from "../CardFrame";
 
 export interface AssetAccount {
   name: string;
@@ -33,14 +34,7 @@ export function AssetManagerView({
         <span className="text-lg font-bold text-[#3D3D3D]">资产管理</span>
       </div>
 
-      <div
-        className="rounded-xl shadow-sm overflow-hidden"
-        style={{
-          backgroundImage: "url(/card-2.png)",
-          backgroundSize: "100% 100%",
-          backgroundRepeat: "no-repeat",
-        }}
-      >
+      <CardFrame className="rounded-xl shadow-sm">
         {accounts.map((account, index) => (
           <div
             key={account.name}
@@ -78,15 +72,11 @@ export function AssetManagerView({
             />
           </div>
         ))}
-      </div>
+      </CardFrame>
 
-      <div
-        className="rounded-xl p-4 shadow-sm flex items-center justify-between"
-        style={{
-          backgroundImage: "url(/card-2.png)",
-          backgroundSize: "100% 100%",
-          backgroundRepeat: "no-repeat",
-        }}
+      <CardFrame
+        className="rounded-xl shadow-sm"
+        contentClassName="flex items-center justify-between p-4"
       >
         <div>
           <div className="text-xs text-[#8C8678]">总资产</div>
@@ -105,7 +95,7 @@ export function AssetManagerView({
         >
           保存
         </button>
-      </div>
+      </CardFrame>
 
       {toast && (
         <div className="fixed top-12 left-0 right-0 z-[70] flex justify-center px-4 pointer-events-none">

@@ -32,11 +32,12 @@ import {
   InsightCard,
   SummaryCard,
 } from "./stats/StatsCards";
+import { CardFrame } from "./CardFrame";
 
 type Period = "week" | "month" | "year";
 
 export default function StatsView() {
-  const [period, setPeriod] = useState<Period>("month");
+  const [period, setPeriod] = useState<Period>("week");
   const today = format(new Date(), "yyyy-MM-dd");
   const [categories] = useState<Category[]>(() => getCategories());
 
@@ -279,14 +280,7 @@ export default function StatsView() {
       {period === "week" && (
         <>
           {/* Expense Trend */}
-          <div
-            className="rounded-xl p-4 shadow-sm"
-            style={{
-              backgroundImage: "url(/card-2.png)",
-              backgroundSize: "100% 100%",
-              backgroundRepeat: "no-repeat",
-            }}
-          >
+          <CardFrame className="rounded-xl shadow-sm" contentClassName="p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <div className="w-1 h-4 rounded-full bg-[#5A8F7B]" />
@@ -311,8 +305,8 @@ export default function StatsView() {
                     x2="0"
                     y2="1"
                   >
-                    <stop offset="5%" stopColor="#5A8F7B" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#5A8F7B" stopOpacity={0} />
+                    <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -336,14 +330,14 @@ export default function StatsView() {
                 <Area
                   type="monotone"
                   dataKey="amount"
-                  stroke="#5A8F7B"
+                  stroke="var(--primary)"
                   strokeWidth={2}
                   fillOpacity={1}
                   fill="url(#colorAmountWeek)"
                 />
               </AreaChart>
             </ResponsiveContainer>
-          </div>
+          </CardFrame>
 
           {/* Weekly Category Ranking + Insight */}
           <div className="space-y-3">
@@ -376,14 +370,7 @@ export default function StatsView() {
       {period === "month" && (
         <>
           {/* Expense Trend */}
-          <div
-            className="rounded-xl p-4 shadow-sm"
-            style={{
-              backgroundImage: "url(/card-2.png)",
-              backgroundSize: "100% 100%",
-              backgroundRepeat: "no-repeat",
-            }}
-          >
+          <CardFrame className="rounded-xl shadow-sm" contentClassName="p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <div className="w-1 h-4 rounded-full bg-[#5A8F7B]" />
@@ -402,8 +389,8 @@ export default function StatsView() {
               <AreaChart data={monthLineData}>
                 <defs>
                   <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#5A8F7B" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#5A8F7B" stopOpacity={0} />
+                    <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -427,14 +414,14 @@ export default function StatsView() {
                 <Area
                   type="monotone"
                   dataKey="amount"
-                  stroke="#5A8F7B"
+                  stroke="var(--primary)"
                   strokeWidth={2}
                   fillOpacity={1}
                   fill="url(#colorAmount)"
                 />
               </AreaChart>
             </ResponsiveContainer>
-          </div>
+          </CardFrame>
 
           {/* Category Ranking + Monthly Insight */}
           <div className="space-y-3">
@@ -465,14 +452,7 @@ export default function StatsView() {
       {period === "year" && (
         <>
           {/* Expense Trend */}
-          <div
-            className="rounded-xl p-4 shadow-sm"
-            style={{
-              backgroundImage: "url(/card-2.png)",
-              backgroundSize: "100% 100%",
-              backgroundRepeat: "no-repeat",
-            }}
-          >
+          <CardFrame className="rounded-xl shadow-sm" contentClassName="p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <div className="w-1 h-4 rounded-full bg-[#5A8F7B]" />
@@ -497,8 +477,8 @@ export default function StatsView() {
                     x2="0"
                     y2="1"
                   >
-                    <stop offset="5%" stopColor="#5A8F7B" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#5A8F7B" stopOpacity={0} />
+                    <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -543,14 +523,14 @@ export default function StatsView() {
                 <Area
                   type="monotone"
                   dataKey="amount"
-                  stroke="#5A8F7B"
+                  stroke="var(--primary)"
                   strokeWidth={2}
                   fillOpacity={1}
                   fill="url(#colorAmountYear)"
                 />
               </AreaChart>
             </ResponsiveContainer>
-          </div>
+          </CardFrame>
 
           {/* Annual Category Ranking + Insight */}
           <div className="space-y-3">

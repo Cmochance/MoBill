@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronRight, TrendingDown, TrendingUp } from "lucide-react";
+import { CardFrame } from "../CardFrame";
 
 export interface CategoryDatum {
   name: string;
@@ -22,14 +23,7 @@ export function SummaryCard({
   budgetProgress,
 }: SummaryCardProps) {
   return (
-    <div
-      className="rounded-xl p-5 shadow-sm"
-      style={{
-        backgroundImage: "url(/card-2.png)",
-        backgroundSize: "100% 100%",
-        backgroundRepeat: "no-repeat",
-      }}
-    >
+    <CardFrame className="rounded-xl shadow-sm" contentClassName="p-5">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-sm" style={{ color: "#8C8678" }}>
@@ -73,7 +67,7 @@ export function SummaryCard({
           </div>
         </div>
       )}
-    </div>
+    </CardFrame>
   );
 }
 
@@ -89,14 +83,7 @@ export function CategoryRankingCard({
   total,
 }: CategoryRankingCardProps) {
   return (
-    <div
-      className="rounded-xl p-4 shadow-sm"
-      style={{
-        backgroundImage: "url(/card-2.png)",
-        backgroundSize: "100% 100%",
-        backgroundRepeat: "no-repeat",
-      }}
-    >
+    <CardFrame className="rounded-xl shadow-sm" contentClassName="p-4">
       <div className="flex items-center gap-2 mb-3">
         <div className="w-1 h-4 rounded-full bg-[#5A8F7B]" />
         <span className="text-sm font-medium text-[#3D3D3D]">{title}</span>
@@ -123,7 +110,7 @@ export function CategoryRankingCard({
       >
         查看全部分类 <ChevronRight size={12} />
       </button>
-    </div>
+    </CardFrame>
   );
 }
 
@@ -147,14 +134,7 @@ export function InsightCard({
   secondaryValue,
 }: InsightCardProps) {
   return (
-    <div
-      className="rounded-xl p-4 shadow-sm"
-      style={{
-        backgroundImage: "url(/card-2.png)",
-        backgroundSize: "100% 100%",
-        backgroundRepeat: "no-repeat",
-      }}
-    >
+    <CardFrame className="rounded-xl shadow-sm" contentClassName="p-4">
       <div className="flex items-center gap-2 mb-3">
         <div className="w-1 h-4 rounded-full bg-[#C4954A]" />
         <span className="text-sm font-medium text-[#3D3D3D]">{title}</span>
@@ -191,6 +171,6 @@ export function InsightCard({
           </div>
         </>
       )}
-    </div>
+    </CardFrame>
   );
 }

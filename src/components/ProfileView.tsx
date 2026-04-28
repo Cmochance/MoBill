@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import {
   format,
   subMonths,
@@ -10,28 +10,32 @@ import {
 } from "date-fns";
 import { getStreakDays, getMonthlyIncome, getExpenses } from "@/lib/data";
 import {
-  exportAllData,
-  importAllData,
-  syncApi,
+  backupDataToLocalFile,
   clearAllData,
+  restoreDataFromLocalFile,
   storage,
 } from "@/lib/storage";
 import {
+  AlertTriangle,
   ChevronRight,
   Grid3x3,
-  Bell,
   Palette,
   Info,
   Settings,
   Upload,
   FileJson,
-  RefreshCw,
 } from "lucide-react";
 import {
   AssetAccount,
   AssetManagerView,
 } from "./profile/AssetManagerView";
 import { ProfileMenu, ProfileMenuItem } from "./profile/ProfileMenu";
+import { CategoryManagerView } from "./profile/CategoryManagerView";
+import { ThemeSettingsView } from "./profile/ThemeSettingsView";
+import { AboutUsModal } from "./profile/AboutUsModal";
+import { CardFrame } from "./CardFrame";
+import { applyTheme, getThemeScheme, type ThemeId } from "@/lib/themes";
+import { APP_VERSION } from "@/lib/app-info";
 
 const DEFAULT_ASSET_ACCOUNTS: AssetAccount[] = [
   { name: "支付宝", amount: 0 },
@@ -63,14 +67,12 @@ function saveAssetAccounts(accounts: AssetAccount[]) {
 }
 
 export default function ProfileView() {
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetConfirmStep, setResetConfirmStep] = useState<0 | 1 | 2>(0);
   const [toast, setToast] = useState<{
     msg: string;
     type: "success" | "error";
   } | null>(null);
-  const [syncEnabled, setSyncEnabled] = useState(
-    () => syncApi.getConfig().enabled,
-  );
+  const [backupBusy, setBackupBusy] = useState(false);
   const [nickname, setNickname] = useState(() => {
     const s = storage.getSettings();
     return s.nickname || "青岚";
@@ -78,8 +80,13 @@ export default function ProfileView() {
   const [editingName, setEditingName] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [showAssetManager, setShowAssetManager] = useState(false);
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [showThemeSettings, setShowThemeSettings] = useState(false);
+  const [showAboutUs, setShowAboutUs] = useState(false);
   const [assetAccounts, setAssetAccounts] = useState(() => getAssetAccounts());
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [themeId, setThemeId] = useState(
+    () => getThemeScheme(storage.getSettings().themeId).id,
+  );
   const streakDays = getStreakDays();
 
   const today = new Date();
@@ -131,38 +138,24 @@ export default function ProfileView() {
     setTimeout(() => setToast(null), 2500);
   };
 
-  const handleExportJSON = () => {
-    const json = exportAllData();
-    const blob = new Blob([json], { type: "application/json;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `墨禅记账备份_${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast("备份文件已下载");
+  const handleBackupData = async () => {
+    if (backupBusy) return;
+    setBackupBusy(true);
+    const result = await backupDataToLocalFile();
+    showToast(result.message, result.success ? "success" : "error");
+    setBackupBusy(false);
   };
 
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const result = importAllData(text);
-      if (result.success) {
-        showToast(result.message, "success");
-        setTimeout(() => window.location.reload(), 800);
-      } else {
-        showToast(result.message, "error");
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = "";
+  const handleRestoreData = async () => {
+    if (backupBusy) return;
+    setBackupBusy(true);
+    const result = await restoreDataFromLocalFile();
+    showToast(result.message, result.success ? "success" : "error");
+    if (result.success && result.shouldReload) {
+      setTimeout(() => window.location.reload(), 800);
+      return;
+    }
+    setBackupBusy(false);
   };
 
   const handleReset = async () => {
@@ -170,31 +163,44 @@ export default function ProfileView() {
     window.location.reload();
   };
 
-  const toggleSync = async () => {
-    const next = !syncEnabled;
-    const result = await syncApi.setEnabled(next);
-    if (result.success) {
-      setSyncEnabled(next);
-      showToast(result.message, "success");
-      if (next) setTimeout(() => window.location.reload(), 600);
-    } else {
-      showToast(result.message, "error");
-    }
-  };
-
-  const handleReloadExternal = async () => {
-    const result = await syncApi.reloadFromExternal();
-    showToast(result.message, result.success ? "success" : "error");
-    if (result.success) setTimeout(() => window.location.reload(), 600);
+  const handleThemeSelect = (nextThemeId: ThemeId) => {
+    setThemeId(nextThemeId);
+    storage.setSettings({
+      ...storage.getSettings(),
+      themeId: nextThemeId,
+    });
+    applyTheme(nextThemeId);
+    showToast("主题已更新");
   };
 
   const menuItems: ProfileMenuItem[] = [
-    { icon: FileJson, label: "备份数据 (JSON)", action: handleExportJSON },
-    { icon: Upload, label: "恢复数据 (JSON)", action: handleImportClick },
-    { icon: Grid3x3, label: "分类管理", disabled: true },
-    { icon: Bell, label: "账单提醒", disabled: true },
-    { icon: Palette, label: "主题设置", disabled: true },
-    { icon: Info, label: "关于我们", disabled: true },
+    {
+      icon: FileJson,
+      label: "备份数据",
+      action: handleBackupData,
+      disabled: backupBusy,
+    },
+    {
+      icon: Upload,
+      label: "恢复数据",
+      action: handleRestoreData,
+      disabled: backupBusy,
+    },
+    {
+      icon: Grid3x3,
+      label: "分类管理",
+      action: () => setShowCategoryManager(true),
+    },
+    {
+      icon: Palette,
+      label: "主题设置",
+      action: () => setShowThemeSettings(true),
+    },
+    {
+      icon: Info,
+      label: "关于我们",
+      action: () => setShowAboutUs(true),
+    },
   ];
 
   if (showAssetManager) {
@@ -209,6 +215,24 @@ export default function ProfileView() {
           showToast("资产已保存");
           setShowAssetManager(false);
         }}
+      />
+    );
+  }
+
+  if (showCategoryManager) {
+    return (
+      <CategoryManagerView
+        onBack={() => setShowCategoryManager(false)}
+      />
+    );
+  }
+
+  if (showThemeSettings) {
+    return (
+      <ThemeSettingsView
+        selectedThemeId={themeId}
+        onBack={() => setShowThemeSettings(false)}
+        onSelect={handleThemeSelect}
       />
     );
   }
@@ -280,14 +304,7 @@ export default function ProfileView() {
       </div>
 
       {/* Asset Overview */}
-      <div
-        className="rounded-xl p-5 shadow-sm"
-        style={{
-          backgroundImage: "url(/card-2.png)",
-          backgroundSize: "100% 100%",
-          backgroundRepeat: "no-repeat",
-        }}
-      >
+      <CardFrame className="rounded-xl shadow-sm" contentClassName="p-5">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium text-[#5A8F7B]">资产概览</span>
           <ChevronRight size={16} className="text-[#D0C8B8]" />
@@ -328,89 +345,21 @@ export default function ProfileView() {
             </button>
           </div>
         </div>
-      </div>
-
-      {/* Cloud Sync Card */}
-      <div
-        className="rounded-xl p-4 shadow-sm"
-        style={{
-          backgroundImage: "url(/card-2.png)",
-          backgroundSize: "100% 100%",
-          backgroundRepeat: "no-repeat",
-        }}
-      >
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-4 rounded-full bg-[#5A8F7B]" />
-            <span className="text-sm font-medium" style={{ color: "#3D3D3D" }}>
-              云盘同步
-            </span>
-          </div>
-          <button
-            onClick={toggleSync}
-            className="relative w-11 h-6 rounded-full transition-colors"
-            style={{
-              backgroundColor: syncEnabled ? "#5A8F7B" : "#D0C8B8",
-            }}
-          >
-            <div
-              className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform"
-              style={{
-                transform: syncEnabled ? "translateX(20px)" : "translateX(0)",
-              }}
-            />
-          </button>
-        </div>
-
-        {syncEnabled ? (
-          <>
-            <div className="text-xs text-[#8C8678] mb-2">
-              数据文件位置：{" "}
-              <span className="text-[#5A8F7B] font-medium">
-                {syncApi.getExternalPathHint()}
-              </span>
-            </div>
-            <div className="text-xs text-[#8C8678] mb-3 leading-relaxed">
-              将该文件夹添加到你的云盘同步目录，即可在多台设备间同步数据。
-              每次记账后数据会自动写入该文件。
-            </div>
-            <button
-              onClick={handleReloadExternal}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#5A8F7B]"
-              style={{ backgroundColor: "rgba(90,143,123,0.08)" }}
-            >
-              <RefreshCw size={12} />
-              从云盘文件重新加载
-            </button>
-          </>
-        ) : (
-          <div className="text-xs text-[#8C8678] leading-relaxed">
-            开启后，所有数据将保存到手机 Documents/MoBill/data.json，
-            你可以将该文件夹加入云盘同步，实现多设备数据互通。
-          </div>
-        )}
-      </div>
+      </CardFrame>
 
       <ProfileMenu
         items={menuItems}
-        onReset={() => setShowResetConfirm(true)}
+        onReset={() => setResetConfirmStep(1)}
       />
 
       {/* Version */}
       <div className="text-center py-2">
-        <span className="text-[10px] text-[#B5AE9E]">MoBill v1.1.2</span>
+        <span className="text-[10px] text-[#B5AE9E]">
+          MoBill v{APP_VERSION}
+        </span>
       </div>
 
-      {/* Hidden file input for import */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".json,application/json"
-        onChange={handleFileChange}
-        className="hidden"
-      />
-
-      {showResetConfirm && (
+      {resetConfirmStep > 0 && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center px-4"
           style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
@@ -419,26 +368,44 @@ export default function ProfileView() {
             className="rounded-xl p-5 w-full max-w-xs"
             style={{ backgroundColor: "#FAF8F3" }}
           >
-            <div className="text-base font-bold text-[#3D3D3D] mb-2">
-              确认清除
+            <div className="mb-3 flex items-center gap-2">
+              <span
+                className="flex h-8 w-8 items-center justify-center rounded-full"
+                style={{ backgroundColor: "rgba(var(--accent-red-rgb), 0.12)" }}
+              >
+                <AlertTriangle size={18} className="text-[#C45C4A]" />
+              </span>
+              <div className="text-base font-bold text-[#3D3D3D]">
+                {resetConfirmStep === 1 ? "危险操作" : "最终确认"}
+              </div>
             </div>
             <p className="text-sm text-[#8C8678] mb-4">
-              此操作将删除所有记账记录和设置，无法恢复。是否继续？
+              {resetConfirmStep === 1
+                ? "清除后将删除所有记账记录、预算、设置以及主数据文件。此操作风险很高，请谨慎继续。"
+                : "这是第二次确认。继续后当前应用数据会被清空，无法在应用内撤销。"}
             </p>
             <div className="flex gap-3">
               <button
-                onClick={() => setShowResetConfirm(false)}
+                onClick={() =>
+                  resetConfirmStep === 1
+                    ? setResetConfirmStep(0)
+                    : setResetConfirmStep(1)
+                }
                 className="flex-1 py-2.5 rounded-lg text-sm font-medium text-[#8C8678]"
                 style={{ backgroundColor: "#F0EDE5" }}
               >
-                取消
+                {resetConfirmStep === 1 ? "取消" : "返回"}
               </button>
               <button
-                onClick={handleReset}
+                onClick={() =>
+                  resetConfirmStep === 1
+                    ? setResetConfirmStep(2)
+                    : handleReset()
+                }
                 className="flex-1 py-2.5 rounded-lg text-sm font-medium text-white"
                 style={{ backgroundColor: "#C45C4A" }}
               >
-                确认清除
+                {resetConfirmStep === 1 ? "继续清除" : "永久清除"}
               </button>
             </div>
           </div>
@@ -458,6 +425,8 @@ export default function ProfileView() {
           </div>
         </div>
       )}
+
+      {showAboutUs && <AboutUsModal onClose={() => setShowAboutUs(false)} />}
     </div>
   );
 }

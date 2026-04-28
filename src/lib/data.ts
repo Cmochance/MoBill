@@ -19,6 +19,8 @@ import {
   subDays,
 } from "date-fns";
 
+const RECENT_DESCRIPTION_LIMIT = 10;
+
 export const DEFAULT_CATEGORIES: Category[] = [
   {
     id: "food",
@@ -149,6 +151,43 @@ export function addExpense(expense: Expense): void {
   const expenses = getExpenses();
   expenses.unshift(expense);
   storage.setExpenses(expenses);
+}
+
+function normalizeDescription(description: unknown): string {
+  return typeof description === "string" ? description.trim() : "";
+}
+
+export function getRecentDescriptions(): string[] {
+  const descriptions = storage.getSettings().recentDescriptions;
+  if (!Array.isArray(descriptions)) return [];
+
+  const seen = new Set<string>();
+  return descriptions
+    .map(normalizeDescription)
+    .filter((description) => {
+      if (!description || seen.has(description)) return false;
+      seen.add(description);
+      return true;
+    })
+    .slice(0, RECENT_DESCRIPTION_LIMIT);
+}
+
+export function rememberDescription(description: string): string[] {
+  const normalized = normalizeDescription(description);
+  const current = getRecentDescriptions();
+  if (!normalized) return current;
+
+  const next = [
+    normalized,
+    ...current.filter((item) => item !== normalized),
+  ].slice(0, RECENT_DESCRIPTION_LIMIT);
+
+  storage.setSettings({
+    ...storage.getSettings(),
+    recentDescriptions: next,
+  });
+
+  return next;
 }
 
 export function updateExpense(expense: Expense): void {

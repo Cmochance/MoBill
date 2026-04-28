@@ -1,11 +1,17 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Expense, MoneyMethod } from "@/lib/types";
-import { getCategories, addExpense } from "@/lib/data";
+import {
+  getCategories,
+  addExpense,
+  getRecentDescriptions,
+  rememberDescription,
+} from "@/lib/data";
 import { format, parseISO } from "date-fns";
 import { createRecordId, getCurrentRecordTime } from "@/lib/records";
 import { CategorySelector } from "./add-expense/CategorySelector";
+import { DescriptionPicker } from "./add-expense/DescriptionPicker";
 import { PaymentMethodPicker } from "./add-expense/PaymentMethodPicker";
 import {
   ExpenseCategory,
@@ -15,11 +21,13 @@ import {
 import {
   ArrowLeft,
   X,
-  Calendar,
+  CalendarDays,
   FileText,
   CreditCard,
   ChevronRight,
 } from "lucide-react";
+import { CardFrame } from "./CardFrame";
+import { DayDatePicker } from "./DayDatePicker";
 
 function loadExpenseCategories(): ExpenseCategory[] {
   return getCategories().map((c) => ({
@@ -37,12 +45,16 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
   const [selectedCat, setSelectedCat] = useState<string>("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  const [recentDescriptions, setRecentDescriptions] = useState<string[]>(
+    getRecentDescriptions,
+  );
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [recordType, setRecordType] = useState<"expense" | "income">("expense");
   const [moneyMethod, setMoneyMethod] = useState<MoneyMethod>("wechat");
   const [showPaymentPicker, setShowPaymentPicker] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showDescriptionPicker, setShowDescriptionPicker] = useState(false);
   const [page, setPage] = useState(0);
-  const dateInputRef = useRef<HTMLInputElement>(null);
 
   const defaultSelectedCat =
     recordType === "expense"
@@ -63,11 +75,12 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
   const handleSubmit = () => {
     const num = parseFloat(amount);
     if (!activeSelectedCat || isNaN(num) || num <= 0) return;
+    const trimmedDescription = description.trim();
     const expense: Expense = {
       id: createRecordId(),
       amount: num,
       categoryId: activeSelectedCat,
-      description,
+      description: trimmedDescription,
       expenseDate: date,
       expenseTime: getCurrentRecordTime(),
       createdAt: new Date().toISOString(),
@@ -76,6 +89,7 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
       incomeMethod: recordType === "income" ? moneyMethod : undefined,
     };
     addExpense(expense);
+    setRecentDescriptions(rememberDescription(trimmedDescription));
     setAmount("");
     setDescription("");
     onBack();
@@ -118,8 +132,8 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
           className="flex-1 py-2 text-sm font-medium transition-all"
           style={{
             backgroundColor:
-              recordType === "expense" ? "#5A8F7B" : "transparent",
-            color: recordType === "expense" ? "#FFF" : "#8C8678",
+              recordType === "expense" ? "var(--primary)" : "transparent",
+            color: recordType === "expense" ? "#FFF" : "var(--text-muted)",
           }}
         >
           支出
@@ -129,8 +143,8 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
           className="flex-1 py-2 text-sm font-medium transition-all"
           style={{
             backgroundColor:
-              recordType === "income" ? "#C45C4A" : "transparent",
-            color: recordType === "income" ? "#FFF" : "#8C8678",
+              recordType === "income" ? "var(--accent-red)" : "transparent",
+            color: recordType === "income" ? "#FFF" : "var(--text-muted)",
           }}
         >
           收入
@@ -138,14 +152,7 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
       </div>
 
       {/* Amount Input */}
-      <div
-        className="rounded-xl p-5 shadow-sm"
-        style={{
-          backgroundImage: "url(/card-2.png)",
-          backgroundSize: "100% 100%",
-          backgroundRepeat: "no-repeat",
-        }}
-      >
+      <CardFrame className="rounded-xl shadow-sm" contentClassName="p-5">
         <div className="flex items-baseline gap-1">
           <span className="text-2xl" style={{ color: "#3D3D3D" }}>
             ¥
@@ -168,7 +175,7 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
         <div className="text-xs text-[#8C8678] mt-2">
           {recordType === "expense" ? "添加一笔支出" : "添加一笔收入"}
         </div>
-      </div>
+      </CardFrame>
 
       <CategorySelector
         recordType={recordType}
@@ -180,13 +187,9 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
       />
 
       {/* Details */}
-      <div
-        className="rounded-xl p-4 shadow-sm space-y-4"
-        style={{
-          backgroundImage: "url(/card-2.png)",
-          backgroundSize: "100% 100%",
-          backgroundRepeat: "no-repeat",
-        }}
+      <CardFrame
+        className="rounded-xl shadow-sm"
+        contentClassName="space-y-4 p-4"
       >
         {/* Date */}
         <div
@@ -194,25 +197,21 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
           style={{ borderBottom: "1px solid rgba(232, 228, 218, 0.5)" }}
         >
           <div className="flex items-center gap-3">
-            <Calendar size={18} className="text-[#8C8678]" />
+            <CalendarDays size={18} className="text-[#8C8678]" />
             <span className="text-sm text-[#3D3D3D]">日期</span>
           </div>
           <button
-            onClick={() => dateInputRef.current?.showPicker?.()}
+            type="button"
+            onClick={() => setShowDatePicker(true)}
             className="flex items-center gap-1"
+            aria-expanded={showDatePicker}
+            aria-label="选择日期"
           >
             <span className="text-sm text-[#8C8678]">
               {format(parseISO(date), "yyyy年M月d日")}
             </span>
             <ChevronRight size={14} className="text-[#D0C8B8]" />
           </button>
-          <input
-            ref={dateInputRef}
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="absolute opacity-0 w-0 h-0"
-          />
         </div>
 
         {/* Description */}
@@ -224,16 +223,24 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
             <FileText size={18} className="text-[#8C8678]" />
             <span className="text-sm text-[#3D3D3D]">备注</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-1 pl-4">
             <input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="可输入备注..."
-              className="text-sm text-right bg-transparent outline-none placeholder-[#B5AE9E]"
+              className="min-w-0 flex-1 text-sm text-right bg-transparent outline-none placeholder-[#B5AE9E]"
               style={{ color: "#3D3D3D" }}
             />
-            <ChevronRight size={14} className="text-[#D0C8B8]" />
+            <button
+              type="button"
+              onClick={() => setShowDescriptionPicker(true)}
+              className="rounded-full p-1 transition-colors active:bg-[#E8E4DA]"
+              aria-label="选择历史备注"
+              aria-expanded={showDescriptionPicker}
+            >
+              <ChevronRight size={14} className="text-[#D0C8B8]" />
+            </button>
           </div>
         </div>
 
@@ -253,7 +260,7 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
             <ChevronRight size={14} className="text-[#D0C8B8]" />
           </button>
         </div>
-      </div>
+      </CardFrame>
 
       {/* Submit */}
       <button
@@ -261,12 +268,52 @@ export default function AddExpenseView({ onBack }: { onBack: () => void }) {
         disabled={!canSubmit}
         className="w-full py-3.5 rounded-xl font-semibold text-base active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-white"
         style={{
-          background: "linear-gradient(135deg, #C45C4A 0%, #A84432 100%)",
-          boxShadow: "0 2px 8px rgba(196, 92, 74, 0.25)",
+          background:
+            "linear-gradient(135deg, var(--accent-red) 0%, var(--accent-red-deep) 100%)",
+          boxShadow: "0 2px 8px rgba(var(--accent-red-rgb), 0.25)",
         }}
       >
         保存
       </button>
+
+      {/* Date Picker */}
+      {showDatePicker && (
+        <div
+          className="fixed inset-0 z-[60] flex items-end justify-center"
+          style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
+          onClick={() => setShowDatePicker(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-xl p-4 space-y-3"
+            style={{ backgroundColor: "#FAF8F3" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-sm font-medium text-[#8C8678] text-center">
+              选择日期
+            </div>
+            <DayDatePicker
+              value={date}
+              onChange={setDate}
+              onClose={() => setShowDatePicker(false)}
+              variant="plain"
+              className="shadow-none"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Description Picker */}
+      {showDescriptionPicker && (
+        <DescriptionPicker
+          descriptions={recentDescriptions}
+          currentDescription={description}
+          onSelect={(nextDescription) => {
+            setDescription(nextDescription);
+            setShowDescriptionPicker(false);
+          }}
+          onClose={() => setShowDescriptionPicker(false)}
+        />
+      )}
 
       {/* Payment Method Picker */}
       {showPaymentPicker && (
